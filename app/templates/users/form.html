@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+
+{% block title %}사용자 {{ "생성" if mode == "create" else "수정" }} | SecureScan{% endblock %}
+
+{% block content %}
+<main class="page-shell narrow">
+  <header class="page-header"><div><p class="eyebrow">SecureScan · ADMIN</p><h1>사용자 {{ "생성" if mode == "create" else "수정" }}</h1></div><a class="secondary button" href="/users">목록으로</a></header>
+  {% if error %}<p class="alert error">{{ error }}</p>{% endif %}
+  {% if mode == "create" %}
+  <form method="post" action="/users" class="card form-stack">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <label>사용자명<input name="username" value="{{ submitted.username if submitted else '' }}" required></label>
+    <label>비밀번호<input type="password" name="password" required></label>
+    <label>비밀번호 확인<input type="password" name="password_confirmation" required></label>
+    <label>역할<select name="role"><option value="USER" {% if submitted and submitted.role == 'USER' %}selected{% endif %}>USER</option><option value="ADMIN" {% if submitted and submitted.role == 'ADMIN' %}selected{% endif %}>ADMIN</option></select></label>
+    <label class="checkbox"><input type="checkbox" name="is_active" value="true" {% if not submitted or submitted.is_active %}checked{% endif %}> 활성 상태로 생성</label>
+    <button type="submit">사용자 생성</button>
+  </form>
+  {% else %}
+  <form method="post" action="/users/{{ user.id }}/edit" class="card form-stack">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <p><strong>{{ user.username }}</strong></p>
+    <label>역할<select name="role"><option value="USER" {% if user.role.value == 'USER' %}selected{% endif %}>USER</option><option value="ADMIN" {% if user.role.value == 'ADMIN' %}selected{% endif %}>ADMIN</option></select></label>
+    <label class="checkbox"><input type="checkbox" name="is_active" value="true" {% if user.is_active %}checked{% endif %}> 계정 활성 상태</label>
+    <button type="submit">변경 저장</button>
+  </form>
+  <form method="post" action="/users/{{ user.id }}/reset-password" class="card form-stack top-gap">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <h2>비밀번호 초기화</h2>
+    <label>새 비밀번호<input type="password" name="password" required></label>
+    <label>새 비밀번호 확인<input type="password" name="password_confirmation" required></label>
+    <button type="submit">비밀번호 저장</button>
+  </form>
+  {% endif %}
+</main>
+{% endblock %}

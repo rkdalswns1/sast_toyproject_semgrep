@@ -1,0 +1,47 @@
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.env
+sast.db
+uploads/*
+!uploads/.gitkeep
+
+# Python
+__pycache__/
+*.py[cod]
+
+# Virtual environment
+.venv/
+venv/
+
+# Environment
+.env
+
+# SQLite
+*.db
+*.sqlite
+*.sqlite3
+
+# Uploaded source files
+uploads/*
+!uploads/.gitkeep
+
+# Temporary analysis workspace
+tmp/
+temp/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+
+*.pdf
+
+.omx/
+work/
+!design/export.pdf
+
+

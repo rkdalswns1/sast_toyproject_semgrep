@@ -1,0 +1,35 @@
+:root {
+  color-scheme: light;
+  font-family: Inter, "Noto Sans KR", sans-serif;
+  color: #17212b;
+  background: #f4f7fa;
+}
+
+* { box-sizing: border-box; }
+body { margin: 0; }
+h1, h2, p { margin-top: 0; }
+button, .button { border: 0; border-radius: 5px; background: #176aa6; color: #fff; cursor: pointer; font: inherit; padding: 10px 14px; text-decoration: none; }
+button:disabled { cursor: not-allowed; opacity: .5; }
+.secondary { background: #fff; border: 1px solid #c9d5df; color: #274052; }
+.auth-page { align-items: center; display: flex; justify-content: center; min-height: 100vh; padding: 24px; }
+.auth-card { background: #fff; border: 1px solid #dce5ec; border-radius: 8px; box-shadow: 0 12px 30px #10243a18; max-width: 430px; padding: 36px; width: 100%; }
+.page-shell { margin: 0 auto; max-width: 1180px; padding: 40px 24px; }
+.page-shell.narrow { max-width: 720px; }
+.page-header, .section-heading, .header-actions, .actions { align-items: center; display: flex; gap: 12px; justify-content: space-between; }
+.page-header { border-bottom: 1px solid #dce5ec; margin-bottom: 24px; padding-bottom: 20px; }
+.header-actions form, .actions form { margin: 0; }
+.card { background: #fff; border: 1px solid #dce5ec; border-radius: 8px; padding: 24px; }
+.form-stack { display: grid; gap: 16px; }
+.form-stack label { display: grid; font-weight: 600; gap: 7px; }
+.form-stack input, .form-stack select { border: 1px solid #b9c8d5; border-radius: 4px; font: inherit; padding: 10px; width: 100%; }
+.form-stack .checkbox { align-items: center; display: flex; font-weight: 400; }
+.form-stack .checkbox input { width: auto; }
+.eyebrow, .muted { color: #637c90; }
+.eyebrow { font-size: .85rem; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
+.alert { border-radius: 5px; padding: 12px; }
+.error { background: #fff0f0; border: 1px solid #efb7b7; color: #9c2929; }
+.badge { background: #dcecf8; border-radius: 4px; color: #1f5d89; font-size: .8rem; padding: 4px 7px; }
+table { border-collapse: collapse; margin-top: 20px; width: 100%; }
+th, td { border-bottom: 1px solid #e4ebf0; padding: 13px; text-align: left; }
+th { color: #637c90; font-size: .85rem; }
+.top-gap { margin-top: 20px; }

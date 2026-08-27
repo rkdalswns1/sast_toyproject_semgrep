@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+
+{% block title %}사용자 관리 | SecureScan{% endblock %}
+
+{% block content %}
+<main class="page-shell">
+  <header class="page-header">
+    <div><p class="eyebrow">SecureScan · ADMIN</p><h1>사용자 관리</h1></div>
+    <div class="header-actions">
+      <span>{{ current_user.username }}</span>
+      <form method="post" action="/logout"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button class="secondary" type="submit">로그아웃</button></form>
+    </div>
+  </header>
+  <section class="card">
+    <div class="section-heading"><div><h2>사용자 목록</h2><p class="muted">계정은 물리적으로 삭제하지 않습니다.</p></div><a class="button" href="/users/new">+ 사용자 생성</a></div>
+    <table>
+      <thead><tr><th>사용자명</th><th>역할</th><th>활성 상태</th><th>관리 작업</th></tr></thead>
+      <tbody>
+      {% for user in users %}
+        <tr>
+          <td>{{ user.username }}</td>
+          <td><span class="badge">{{ user.role.value }}</span></td>
+          <td>{{ "활성" if user.is_active else "비활성" }}</td>
+          <td class="actions"><a class="secondary button" href="/users/{{ user.id }}/edit">수정</a>
+            <form method="post" action="/users/{{ user.id }}/toggle-active"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button class="secondary" type="submit" {% if user.id == current_user.id and user.is_active %}disabled{% endif %}>{{ "비활성화" if user.is_active else "활성화" }}</button></form>
+          </td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </section>
+</main>
+{% endblock %}

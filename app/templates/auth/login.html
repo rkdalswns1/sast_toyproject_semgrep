@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+
+{% block title %}계정 로그인 | SecureScan{% endblock %}
+
+{% block content %}
+<main class="auth-page">
+  <section class="auth-card">
+    <p class="eyebrow">SecureScan</p>
+    <h1>계정 로그인</h1>
+    <p class="muted">조직에서 발급받은 계정으로 로그인하세요.</p>
+    {% if error %}<p class="alert error">{{ error }}</p>{% endif %}
+    <form method="post" action="/login" class="form-stack">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <label>사용자명<input name="username" value="{{ username }}" required autofocus></label>
+      <label>비밀번호<input type="password" name="password" required></label>
+      <button type="submit">로그인</button>
+    </form>
+  </section>
+</main>
+{% endblock %}
