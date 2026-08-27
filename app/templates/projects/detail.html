@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+
+{% block title %}{{ project.name }} | SecureScan{% endblock %}
+
+{% block content %}
+<main class="page-shell">
+  <header class="page-header">
+    <div><p class="eyebrow">프로젝트</p><h1>{{ project.name }}</h1><p class="muted">{{ project.description or "프로젝트 설명이 없습니다." }}</p></div>
+    <div class="header-actions"><a class="secondary button" href="/projects">목록</a>{% if is_admin %}<a class="secondary button" href="/projects/{{ project.id }}/users">사용자 할당</a><a class="button" href="/projects/{{ project.id }}/edit">프로젝트 수정</a>{% endif %}</div>
+  </header>
+  <section class="card metadata-grid">
+    <div><span>언어</span><strong>{{ project.language.value }}</strong></div>
+    <div><span>소스 유형</span><strong>{{ project.source_type.value }}</strong></div>
+    <div><span>생성자</span><strong>{{ project.creator.username }}</strong></div>
+    <div><span>생성 일시</span><strong>{{ project.created_at.strftime('%Y-%m-%d %H:%M') }}</strong></div>
+  </section>
+  <section class="card top-gap">
+    <h2>ZIP 소스 업로드</h2>
+    <p class="muted">ZIP 최대 20 MiB · 압축 해제 후 최대 100 MiB · ZIP Slip 및 심볼릭 링크는 거부됩니다.</p>
+    {% if upload_error %}<p class="alert error">{{ upload_error }}</p>{% endif %}
+    {% if analysis_error %}<p class="alert error">{{ analysis_error }}</p>{% endif %}
+    {% if project.source_path %}<p class="alert success">현재 소스 ZIP이 안전하게 저장되었습니다.</p>{% endif %}
+    <form method="post" action="/projects/{{ project.id }}/analysis" enctype="multipart/form-data" class="form-stack">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <label>ZIP 파일<input type="file" name="source_file" accept=".zip,application/zip" required></label>
+      <button type="submit">ZIP 소스 저장</button>
+    </form>
+    {% if project.source_path %}
+    <form method="post" action="/projects/{{ project.id }}/analysis" class="form-stack top-gap">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <button type="submit">Semgrep 분석 실행</button>
+    </form>
+    <p class="muted"><a href="/projects/{{ project.id }}/analysis">분석 실행 이력 보기</a></p>
+    {% endif %}
+  </section>
+</main>
+{% endblock %}

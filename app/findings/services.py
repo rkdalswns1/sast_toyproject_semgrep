@@ -1,0 +1,149 @@
+"""Semgrep-result normalization and Finding persistence."""
+
+from __future__ import annotations
+
+from pathlib import Path
+from typing import Any
+
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+
+from app.db.models.enums import Confidence, Severity
+from app.db.models.finding import Finding
+from app.db.models.rule import Rule
+
+
+class FindingNormalizationError(ValueError):
+    """Raised when Semgrep output cannot be normalized safely."""
+
+
+_SEMGREP_SEVERITY_MAP = {
+    "ERROR": Severity.HIGH,
+    "WARNING": Severity.MEDIUM,
+    "INFO": Severity.INFO,
+}
+
+
+def _enum_or_default(enum_type: type[Severity] | type[Confidence], value: object, default):
+    if isinstance(value, str):
+        try:
+            return enum_type(value.upper())
+        except ValueError:
+            pass
+    return default
+
+
+def _normalized_path(value: object, source_root: Path) -> str:
+    if not isinstance(value, str) or not value:
+        raise FindingNormalizationError("Semgrep 결과에 파일 경로가 없습니다.")
+    raw_path = Path(value)
+    try:
+        return raw_path.resolve().relative_to(source_root.resolve()).as_posix()
+    except ValueError:
+        # Semgrep can emit a relative path. Do not let a result persist an
+        # absolute workspace path or path traversal sequence for display.
+        if raw_path.is_absolute() or ".." in raw_path.parts:
+            raise FindingNormalizationError("Semgrep 결과의 파일 경로를 처리하지 못했습니다.")
+        return raw_path.as_posix()
+
+
+def _required_line(position: object, field_name: str) -> int:
+    if not isinstance(position, dict) or not isinstance(position.get("line"), int):
+        raise FindingNormalizationError(f"Semgrep 결과에 {field_name} 위치가 없습니다.")
+    return position["line"]
+
+
+def _optional_column(position: object) -> int | None:
+    if isinstance(position, dict) and isinstance(position.get("col"), int):
+        return position["col"]
+    return None
+
+
+def persist_normalized_findings(
+    session: Session,
+    *,
+    analysis_run_id: int,
+    language,
+    semgrep_result: dict[str, Any],
+    source_root: Path,
+) -> int:
+    """Persist results mapped to an existing catalog rule; never invent one."""
+    results = semgrep_result.get("results")
+    if not isinstance(results, list):
+        raise FindingNormalizationError("Semgrep 결과를 처리하지 못했습니다.")
+
+    check_ids: set[str] = set()
+    for item in results:
+        if isinstance(item, dict) and isinstance(item.get("check_id"), str):
+            check_id = item["check_id"]
+            check_ids.add(check_id)
+            check_ids.add(check_id.rsplit(".", 1)[-1])
+    if not check_ids:
+        return 0
+    rules = session.scalars(
+        select(Rule).where(Rule.semgrep_rule_id.in_(check_ids))
+    ).all()
+    rules_by_semgrep_id = {
+        rule.semgrep_rule_id: rule for rule in rules if rule.semgrep_rule_id is not None
+    }
+
+    findings: list[Finding] = []
+    for item in results:
+        if not isinstance(item, dict):
+            raise FindingNormalizationError("Semgrep 결과를 처리하지 못했습니다.")
+        check_id = item.get("check_id")
+        rule = rules_by_semgrep_id.get(check_id)
+        if rule is None and isinstance(check_id, str):
+            # Semgrep prefixes local YAML rule IDs with the configuration path.
+            rule = rules_by_semgrep_id.get(check_id.rsplit(".", 1)[-1])
+        if rule is None:
+            # Rule catalog ownership starts in Phase 8. Until then an unmapped
+            # engine result must not produce a fabricated KISA association.
+            continue
+
+        extra = item.get("extra")
+        if not isinstance(extra, dict):
+            raise FindingNormalizationError("Semgrep 결과의 메타데이터를 처리하지 못했습니다.")
+        metadata = extra.get("metadata")
+        metadata = metadata if isinstance(metadata, dict) else {}
+        message = extra.get("message")
+        if not isinstance(message, str) or not message.strip():
+            raise FindingNormalizationError("Semgrep 결과에 메시지가 없습니다.")
+
+        raw_severity = extra.get("severity")
+        severity = _enum_or_default(
+            Severity,
+            raw_severity,
+            _SEMGREP_SEVERITY_MAP.get(str(raw_severity).upper(), rule.severity),
+        )
+        confidence = _enum_or_default(
+            Confidence, metadata.get("confidence"), Confidence.MEDIUM
+        )
+        recommendation = metadata.get("recommendation")
+        if not isinstance(recommendation, str):
+            recommendation = None
+        evidence_lines = extra.get("lines")
+        evidence = {"lines": evidence_lines} if isinstance(evidence_lines, str) else None
+
+        findings.append(
+            Finding(
+                analysis_run_id=analysis_run_id,
+                rule_id=rule.id,
+                rule_name=rule.name,
+                kisa_id=rule.standard_id,
+                language=language,
+                severity=severity,
+                confidence=confidence,
+                file_path=_normalized_path(item.get("path"), source_root),
+                start_line=_required_line(item.get("start"), "시작"),
+                start_column=_optional_column(item.get("start")),
+                end_line=_required_line(item.get("end"), "종료"),
+                end_column=_optional_column(item.get("end")),
+                message=message.strip(),
+                evidence=evidence,
+                recommendation=recommendation,
+                raw_result=item,
+            )
+        )
+    session.add_all(findings)
+    return len(findings)

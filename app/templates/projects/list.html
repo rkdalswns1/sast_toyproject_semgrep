@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+
+{% block title %}프로젝트 목록 | SecureScan{% endblock %}
+
+{% block content %}
+<main class="page-shell">
+  <header class="page-header">
+    <div><p class="eyebrow">SecureScan{% if is_admin %} · ADMIN{% endif %}</p><h1>프로젝트 목록</h1></div>
+    <div class="header-actions">
+      {% if is_admin %}<a class="button" href="/projects/new">+ 프로젝트 생성</a><a class="secondary button" href="/users">사용자 관리</a>{% endif %}
+      <span>{{ current_user.username }}</span>
+      <form method="post" action="/logout"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button class="secondary" type="submit">로그아웃</button></form>
+    </div>
+  </header>
+  <section class="card">
+    {% if projects %}
+    <table>
+      <thead><tr><th>프로젝트명</th><th>언어</th><th>설명</th><th>생성 일시</th><th></th></tr></thead>
+      <tbody>{% for project in projects %}
+        <tr><td><strong>{{ project.name }}</strong></td><td><span class="badge">{{ project.language.value }}</span></td><td>{{ project.description or "-" }}</td><td>{{ project.created_at.strftime('%Y-%m-%d') }}</td><td><a class="secondary button" href="/projects/{{ project.id }}">상세</a></td></tr>
+      {% endfor %}</tbody>
+    </table>
+    {% else %}
+    <div class="empty-state"><h2>등록된 프로젝트가 없습니다</h2><p class="muted">{% if is_admin %}프로젝트를 생성하여 정적 분석을 준비하세요.{% else %}관리자가 프로젝트에 사용자를 할당하면 이곳에 표시됩니다.{% endif %}</p>{% if is_admin %}<a class="button" href="/projects/new">프로젝트 생성</a>{% endif %}</div>
+    {% endif %}
+  </section>
+</main>
+{% endblock %}

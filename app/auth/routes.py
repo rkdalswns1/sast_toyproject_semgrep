@@ -98,7 +98,7 @@ async def login(
             status_code=status.HTTP_400_BAD_REQUEST,
         )
     log_in(request, user.id)
-    return _redirect("/users" if user.role is UserRole.ADMIN else "/health", request)
+    return _redirect("/projects", request)
 
 
 @router.post("/logout")

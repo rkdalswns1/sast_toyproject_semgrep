@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+
+{% block title %}분석 #{{ analysis_run.id }} | SecureScan{% endblock %}
+
+{% block content %}
+<main class="page-shell">
+  <header class="page-header">
+    <div><p class="eyebrow">Semgrep 분석</p><h1>실행 #{{ analysis_run.id }}</h1></div>
+    <div class="header-actions"><a class="secondary button" href="/projects/{{ analysis_run.project_id }}/analysis">분석 이력</a><a class="button" href="/projects/{{ analysis_run.project_id }}">프로젝트</a></div>
+  </header>
+  <section class="card metadata-grid">
+    <div><span>상태</span><strong>{{ analysis_run.status.value }}</strong></div>
+    <div><span>언어</span><strong>{{ analysis_run.language.value }}</strong></div>
+    <div><span>엔진</span><strong>{{ analysis_run.engine }}</strong></div>
+    <div><span>시작 일시</span><strong>{{ analysis_run.started_at.strftime('%Y-%m-%d %H:%M:%S') if analysis_run.started_at else '-' }}</strong></div>
+    <div><span>종료 일시</span><strong>{{ analysis_run.finished_at.strftime('%Y-%m-%d %H:%M:%S') if analysis_run.finished_at else '-' }}</strong></div>
+  </section>
+  {% if analysis_run.error_message %}<p class="alert error">{{ analysis_run.error_message }}</p>{% endif %}
+  {% if analysis_run.summary %}<section class="card top-gap"><h2>수집 결과</h2><p>엔진 탐지 건수: {{ analysis_run.summary.finding_count }}</p><p>저장된 Finding: {{ analysis_run.summary.stored_finding_count or 0 }}</p><p>엔진 오류 건수: {{ analysis_run.summary.error_count }}</p><a class="button" href="/analysis/{{ analysis_run.id }}/findings">Finding 목록 보기</a></section>{% endif %}
+</main>
+{% endblock %}

@@ -78,7 +78,7 @@ def test_bootstrap_login_and_csrf_protection(tmp_path: Path) -> None:
                         "/login",
                         data={"username": "admin", "password": "admin", "csrf_token": token},
                     )
-                ).headers["location"] == "/users"
+                ).headers["location"] == "/projects"
 
                 users_page = await client.get("/users")
                 assert users_page.status_code == 200
@@ -179,7 +179,7 @@ def test_admin_user_management_and_role_protection(tmp_path: Path) -> None:
                         "csrf_token": user_token,
                     },
                 )
-                assert response.headers["location"] == "/health"
+                assert response.headers["location"] == "/projects"
                 assert (await user_client.get("/users")).status_code == 403
 
     asyncio.run(exercise())

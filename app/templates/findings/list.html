@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+
+{% block title %}Finding 목록 | SecureScan{% endblock %}
+
+{% block content %}
+<main class="page-shell">
+  <header class="page-header">
+    <div><p class="eyebrow">Finding 목록</p><h1>분석 #{{ analysis_run.id }}</h1></div>
+    <div class="header-actions"><a class="secondary button" href="/analysis/{{ analysis_run.id }}">분석 상세</a></div>
+  </header>
+  <section class="card">
+    <form method="get" action="/analysis/{{ analysis_run.id }}/findings" class="filter-row">
+      <label>심각도
+        <select name="severity"><option value="">전체</option>{% for value in severity_values %}<option value="{{ value.value }}" {% if selected_severity == value %}selected{% endif %}>{{ value.value }}</option>{% endfor %}</select>
+      </label>
+      <label>신뢰도
+        <select name="confidence"><option value="">전체</option>{% for value in confidence_values %}<option value="{{ value.value }}" {% if selected_confidence == value %}selected{% endif %}>{{ value.value }}</option>{% endfor %}</select>
+      </label>
+      <button type="submit">필터 적용</button>
+    </form>
+  </section>
+  <section class="card top-gap">
+    {% if findings %}
+    <table>
+      <thead><tr><th>심각도</th><th>신뢰도</th><th>규칙</th><th>위치</th><th>메시지</th></tr></thead>
+      <tbody>{% for finding in findings %}<tr>
+        <td>{{ finding.severity.value }}</td><td>{{ finding.confidence.value }}</td><td><a href="/findings/{{ finding.id }}">{{ finding.rule_name }}</a></td>
+        <td>{{ finding.file_path }}:{{ finding.start_line }}</td><td>{{ finding.message }}</td>
+      </tr>{% endfor %}</tbody>
+    </table>
+    {% else %}<p class="muted">조건에 맞는 Finding이 없습니다.</p>{% endif %}
+  </section>
+</main>
+{% endblock %}

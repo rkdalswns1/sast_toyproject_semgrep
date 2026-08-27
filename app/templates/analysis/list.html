@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+
+{% block title %}{{ project.name }} 분석 이력 | SecureScan{% endblock %}
+
+{% block content %}
+<main class="page-shell">
+  <header class="page-header">
+    <div><p class="eyebrow">분석 이력</p><h1>{{ project.name }}</h1></div>
+    <div class="header-actions"><a class="secondary button" href="/projects/{{ project.id }}">프로젝트로 돌아가기</a></div>
+  </header>
+  <section class="card">
+    {% if analysis_runs %}
+    <table>
+      <thead><tr><th>실행 ID</th><th>엔진</th><th>상태</th><th>시작 일시</th><th></th></tr></thead>
+      <tbody>{% for run in analysis_runs %}<tr>
+        <td>#{{ run.id }}</td><td>{{ run.engine }}</td><td>{{ run.status.value }}</td>
+        <td>{{ run.started_at.strftime('%Y-%m-%d %H:%M:%S') if run.started_at else '-' }}</td>
+        <td><a href="/analysis/{{ run.id }}">상세</a></td>
+      </tr>{% endfor %}</tbody>
+    </table>
+    {% else %}<p class="muted">아직 분석 실행 이력이 없습니다.</p>{% endif %}
+  </section>
+</main>
+{% endblock %}

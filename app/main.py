@@ -12,6 +12,8 @@ from app.auth.routes import router as auth_router
 from app.auth.services import bootstrap_administrator
 from app.config import Settings
 from app.db.database import create_db_engine, create_session_factory, initialize_database
+from app.projects.routes import router as projects_router
+from app.rules.services import seed_kisa_2021_catalog
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -25,6 +27,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         initialize_database(engine)
         with session_factory() as session:
             bootstrap_administrator(session)
+        with session_factory() as session:
+            seed_kisa_2021_catalog(session)
         yield
         engine.dispose()
 
@@ -41,6 +45,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         name="static",
     )
     application.include_router(auth_router)
+    application.include_router(projects_router)
 
     @application.get("/health", tags=["system"])
     async def health() -> dict[str, str]:
