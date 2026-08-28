@@ -22,7 +22,7 @@ def _settings(tmp_path: Path) -> Settings:
     return Settings(
         app_env="test",
         database_url=f"sqlite:///{tmp_path / 'upload.db'}",
-        session_secret="test-session-secret",
+        session_secret="test-session-secret-at-least-32-characters",
         upload_dir=tmp_path / "uploads",
         max_upload_bytes=20 * 1024 * 1024,
         max_extracted_bytes=100 * 1024 * 1024,
@@ -57,12 +57,28 @@ def _symlink_zip_bytes() -> bytes:
     return output.getvalue()
 
 
+def _encrypted_flag_zip_bytes() -> bytes:
+    data = bytearray(_zip_bytes({"secret.py": "print('hidden')"}))
+    local_header = data.find(b"PK\x03\x04")
+    central_header = data.find(b"PK\x01\x02")
+    assert local_header >= 0 and central_header >= 0
+    local_flags = int.from_bytes(data[local_header + 6 : local_header + 8], "little")
+    central_flags = int.from_bytes(
+        data[central_header + 8 : central_header + 10], "little"
+    )
+    data[local_header + 6 : local_header + 8] = (local_flags | 1).to_bytes(2, "little")
+    data[central_header + 8 : central_header + 10] = (central_flags | 1).to_bytes(
+        2, "little"
+    )
+    return bytes(data)
+
+
 async def _login_as_admin(client: AsyncClient) -> None:
     page = await client.get("/login")
     response = await client.post(
         "/login",
         data={
-            "username": "admin",
+            "username": "admin@company.com",
             "password": "admin",
             "csrf_token": _csrf_token(page.text),
         },
@@ -72,7 +88,7 @@ async def _login_as_admin(client: AsyncClient) -> None:
 
 def _create_project(application, name: str = "Upload target") -> int:
     with Session(application.state.db_engine) as session:
-        admin = session.scalar(select(User).where(User.username == "admin"))
+        admin = session.scalar(select(User).where(User.username == "admin@company.com"))
         assert admin is not None
         admin_id = admin.id
     with Session(application.state.db_engine) as session:
@@ -142,6 +158,7 @@ def test_zip_slip_and_symlink_uploads_are_rejected_without_persistence(tmp_path:
                 for archive in (
                     _zip_bytes({"../escape.py": "raise RuntimeError"}),
                     _symlink_zip_bytes(),
+                    _encrypted_flag_zip_bytes(),
                 ):
                     response = await client.post(
                         f"/projects/{project_id}/analysis",

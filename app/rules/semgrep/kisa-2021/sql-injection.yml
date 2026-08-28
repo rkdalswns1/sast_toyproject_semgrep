@@ -1,0 +1,38 @@
+rules:
+  - id: kisa-2021-sql-injection-python
+    languages: [python]
+    severity: ERROR
+    message: SQL query is constructed with string concatenation.
+    metadata:
+      kisa_standard_id: 제1절-1
+      confidence: HIGH
+      recommendation: Use parameterized queries instead of concatenating untrusted input.
+    pattern: $CURSOR.execute($QUERY + $VALUE)
+
+  - id: kisa-2021-sql-injection-java
+    languages: [java]
+    severity: ERROR
+    message: SQL query is constructed with string concatenation.
+    metadata:
+      kisa_standard_id: 제1절-1
+      confidence: HIGH
+      recommendation: Use a PreparedStatement with bound parameters.
+    patterns:
+      - pattern: $DB.$METHOD($QUERY + $VALUE)
+      - metavariable-regex:
+          metavariable: $METHOD
+          regex: ^(execute|executeQuery|executeUpdate)$
+
+  - id: kisa-2021-sql-injection-javascript
+    languages: [javascript]
+    severity: ERROR
+    message: SQL query is constructed with string concatenation.
+    metadata:
+      kisa_standard_id: 제1절-1
+      confidence: HIGH
+      recommendation: Use parameterized queries instead of concatenating untrusted input.
+    patterns:
+      - pattern: $DB.$METHOD($QUERY + $VALUE)
+      - metavariable-regex:
+          metavariable: $METHOD
+          regex: ^(query|execute)$

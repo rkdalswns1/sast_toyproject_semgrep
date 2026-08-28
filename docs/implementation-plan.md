@@ -17,9 +17,9 @@ Python 패키지 버전을 루트 `requirements.txt`에 고정하고 `.env.examp
 
 ## Phase 2 — Database
 
-6개 테이블과 SQLAlchemy 모델, 초기 테이블 생성 테스트를 만든다.
+핵심 6개 도메인 테이블과 스키마 이력용 `schema_versions` 테이블, SQLAlchemy 모델, 초기 테이블 생성 테스트를 만든다. 기존 DB 변경은 `create_all()` 이후 저장소 내부 버전 마이그레이션으로 적용한다.
 
-완료조건: 모든 테이블과 FK 확인.
+완료조건: 모든 테이블과 FK, 마이그레이션 이력 및 기존 DB 업그레이드 확인.
 
 ## Phase 3 — Authentication
 
@@ -27,7 +27,7 @@ Python 패키지 버전을 루트 `requirements.txt`에 고정하고 `.env.examp
 
 FastAPI 의존성으로 요청마다 DB Session을 만들고, 예외 시 rollback·요청 종료 시 close한다. 모든 상태 변경 `POST` 폼(로그인·로그아웃 포함)에 세션 기반 CSRF 토큰을 적용하고, 누락 또는 불일치는 `403`으로 처리한다.
 
-사용자 테이블이 비어 있으면 최초 관리자 `admin` / `admin`을 한 번만 생성한다. 비밀번호는 bcrypt 해시로만 저장한다.
+사용자 테이블이 비어 있으면 최초 관리자 `admin@company.com` / `admin`을 한 번만 생성한다. 비밀번호는 bcrypt 해시로만 저장한다. 기존 MVP의 `admin` 식별자는 시작 시 `admin@company.com`으로 전환한다.
 
 ADMIN 전용 사용자 관리 기능을 구현한다.
 
@@ -50,7 +50,7 @@ ADMIN 전용 사용자 관리 기능을 구현한다.
 - 로그인 성공·실패 테스트 통과
 - 역할 제한 테스트 통과
 - 일반 USER의 사용자 관리 접근 차단
-- 중복 username 생성 차단
+- `@company.com` 형식 검증과 중복 회사 이메일 생성 차단
 - 비밀번호 초기화 시 bcrypt 해시 저장
 - 자기 자신과 마지막 활성 ADMIN 보호
 - CSRF 누락·위조 POST 요청이 403으로 거부됨
@@ -96,5 +96,11 @@ Semgrep 결과 정규화, DB 저장, 목록·상세·severity 필터를 구현�
 ## Phase 9 — Verification
 
 인증, 권한, 업로드 보안, 분석, 결과 관리, 오류 처리를 통합 검증한다.
+
+SEC 검증에는 세션 발급·위변조·만료, 프로젝트 소속 기반 `404`, 프로젝트별 소스 경계, ZIP 경로·링크·암호화 방어, Semgrep 자원·출력·timeout 통제와 외부 구성요소 관리 문서를 포함한다.
+
+TST-001~008은 각각 구현 위치와 독립적인 자동 검증 근거를 가져야 한다. TST-005는 `tests/samples/`의 Java, JavaScript, Python 취약·정상 예제와 `expected_findings.json`을 사용하며, TST-008은 실패 기록을 유지한 상태에서 원인 수정 후 새 분석이 성공하는지 확인한다.
+
+QLT-001~005는 책임별 라우트·서비스 소유권, 진단 항목별 독립 규칙 파일, 공통 언어 registry·분석 흐름·Finding 계약, 프로젝트-실행-결과-Rule 정합성의 자동 구조 시험으로 검증한다.
 
 완료조건: 전체 테스트 통과 및 요구사항 추적표 작성.

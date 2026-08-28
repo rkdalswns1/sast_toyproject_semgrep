@@ -6,7 +6,16 @@ from sqlalchemy.exc import StatementError
 from sqlalchemy.orm import Session
 
 from app.db.database import create_db_engine, initialize_database
-from app.db.models import AnalysisRun, Finding, Project, ProjectUser, Rule, User
+from app.db.models import (
+    AnalysisRun,
+    DiagnosticRule,
+    Finding,
+    Project,
+    ProjectUser,
+    Rule,
+    SchemaVersion,
+    User,
+)
 from app.db.models.enums import (
     AnalysisStatus,
     Confidence,
@@ -25,6 +34,8 @@ EXPECTED_TABLES = {
     "analysis_runs",
     "rules",
     "findings",
+    "diagnostic_rules",
+    "schema_versions",
 }
 
 EXPECTED_FOREIGN_KEYS = {
@@ -41,6 +52,7 @@ EXPECTED_FOREIGN_KEYS = {
         ("analysis_run_id", "analysis_runs", "id", "CASCADE"),
         ("rule_id", "rules", "id", "RESTRICT"),
     },
+    "diagnostic_rules": {("catalog_rule_id", "rules", "id", "CASCADE")},
 }
 
 
@@ -58,7 +70,9 @@ def _foreign_keys(inspector, table_name: str) -> set[tuple[str, str, str, str]]:
     return result
 
 
-def test_create_all_builds_six_tables_and_foreign_keys(tmp_path: Path) -> None:
+def test_create_all_builds_domain_tables_schema_history_and_foreign_keys(
+    tmp_path: Path,
+) -> None:
     database_path = tmp_path / "schema.db"
     engine = create_db_engine(f"sqlite:///{database_path}")
 
@@ -71,6 +85,71 @@ def test_create_all_builds_six_tables_and_foreign_keys(tmp_path: Path) -> None:
 
     with engine.connect() as connection:
         assert connection.execute(text("PRAGMA foreign_keys")).scalar_one() == 1
+
+    with Session(engine) as session:
+        versions = session.scalars(
+            select(SchemaVersion).order_by(SchemaVersion.version)
+        ).all()
+        assert [version.version for version in versions] == [1, 2, 3]
+        assert all(version.description and version.applied_at for version in versions)
+
+    initialize_database(engine)
+    with Session(engine) as session:
+        assert session.scalar(select(func.count()).select_from(SchemaVersion)) == 3
+
+    engine.dispose()
+
+
+def test_existing_database_is_upgraded_and_migration_is_recorded(
+    tmp_path: Path,
+) -> None:
+    engine = create_db_engine(f"sqlite:///{tmp_path / 'legacy.db'}")
+    with engine.begin() as connection:
+        connection.execute(
+            text(
+                """
+                CREATE TABLE rules (
+                    id INTEGER PRIMARY KEY,
+                    name VARCHAR(200) NOT NULL,
+                    description TEXT NOT NULL,
+                    standard_id VARCHAR(100) NOT NULL UNIQUE,
+                    category VARCHAR(100) NOT NULL,
+                    severity VARCHAR(20) NOT NULL,
+                    supported_languages JSON NOT NULL,
+                    implementation_status VARCHAR(30) NOT NULL,
+                    semgrep_rule_id VARCHAR(255)
+                )
+                """
+            )
+        )
+        connection.execute(
+            text(
+                """
+                INSERT INTO rules (
+                    id, name, description, standard_id, category, severity,
+                    supported_languages, implementation_status, semgrep_rule_id
+                ) VALUES (
+                    1, 'Legacy rule', 'legacy', 'TEST-001', 'TEST', 'LOW',
+                    '[]', 'NOT_IMPLEMENTED', NULL
+                )
+                """
+            )
+        )
+
+    initialize_database(engine)
+    inspector = inspect(engine)
+    rule_columns = {column["name"] for column in inspector.get_columns("rules")}
+    assert {"item_number", "reference_info", "is_active"} <= rule_columns
+
+    with Session(engine) as session:
+        legacy_rule = session.get(Rule, 1)
+        assert legacy_rule is not None
+        assert legacy_rule.item_number == 1
+        assert legacy_rule.reference_info is None
+        assert legacy_rule.is_active is True
+        assert session.scalars(
+            select(SchemaVersion.version).order_by(SchemaVersion.version)
+        ).all() == [1, 2, 3]
 
     engine.dispose()
 
@@ -97,6 +176,7 @@ def test_documented_enum_constraints_are_created(tmp_path: Path) -> None:
         "finding_language",
         "finding_severity",
         "finding_confidence",
+        "rule_item_number_positive",
     } <= constraint_names
 
     engine.dispose()

@@ -23,7 +23,7 @@ from app.projects.services import create_project
 def _settings(tmp_path: Path) -> Settings:
     return Settings(
         app_env="test", database_url=f"sqlite:///{tmp_path / 'findings.db'}",
-        session_secret="test-session-secret", upload_dir=tmp_path / "uploads",
+        session_secret="test-session-secret-at-least-32-characters", upload_dir=tmp_path / "uploads",
         max_upload_bytes=20 * 1024 * 1024, max_extracted_bytes=100 * 1024 * 1024,
         max_archive_files=2_000, max_single_file_bytes=10 * 1024 * 1024,
         semgrep_timeout_seconds=60, template_dir=Path("app/templates").resolve(),
@@ -46,7 +46,7 @@ def _zip_bytes() -> bytes:
 
 def _seed_project_and_rule(application) -> int:
     with Session(application.state.db_engine) as session:
-        admin = session.scalar(select(User).where(User.username == "admin"))
+        admin = session.scalar(select(User).where(User.username == "admin@company.com"))
         assert admin is not None
         admin_id = admin.id
     with Session(application.state.db_engine) as session:
@@ -86,7 +86,7 @@ def test_semgrep_result_is_normalized_persisted_and_filterable(tmp_path: Path, m
             command, 0, __import__("json").dumps({"results": [raw_result], "errors": []}), ""
         )
 
-    monkeypatch.setattr(analysis_service.subprocess, "run", fake_run)
+    monkeypatch.setattr(analysis_service, "_run_semgrep_process", fake_run)
 
     async def exercise() -> tuple[int, int]:
         async with application.router.lifespan_context(application):
@@ -94,7 +94,7 @@ def test_semgrep_result_is_normalized_persisted_and_filterable(tmp_path: Path, m
             transport = ASGITransport(app=application)
             async with AsyncClient(transport=transport, base_url="http://testserver", follow_redirects=False) as client:
                 login = await client.get("/login")
-                await client.post("/login", data={"username": "admin", "password": "admin", "csrf_token": _csrf_token(login.text)})
+                await client.post("/login", data={"username": "admin@company.com", "password": "admin", "csrf_token": _csrf_token(login.text)})
                 detail = await client.get(f"/projects/{project_id}")
                 token = _csrf_token(detail.text)
                 upload = await client.post(
@@ -120,6 +120,7 @@ def test_semgrep_result_is_normalized_persisted_and_filterable(tmp_path: Path, m
                 assert detail_response.status_code == 200
                 assert "원본 Semgrep 결과" in detail_response.text
                 assert "dangerous_call(user_input)" in detail_response.text
+                assert "TEST-001" in detail_response.text
                 return project_id, analysis_id
 
     _, analysis_id = asyncio.run(exercise())
@@ -128,7 +129,14 @@ def test_semgrep_result_is_normalized_persisted_and_filterable(tmp_path: Path, m
         analysis_run = session.get(AnalysisRun, analysis_id)
         finding = session.scalar(select(Finding).where(Finding.analysis_run_id == analysis_id))
         assert analysis_run is not None and finding is not None
-        assert analysis_run.summary == {
+        linked_rule = session.get(Rule, finding.rule_id)
+        assert linked_rule is not None
+        assert linked_rule.standard_id == finding.kisa_id
+        assert analysis_run.summary is not None
+        assert {
+            key: analysis_run.summary[key]
+            for key in ("finding_count", "error_count", "stored_finding_count")
+        } == {
             "finding_count": 1,
             "error_count": 0,
             "stored_finding_count": 1,
@@ -155,7 +163,7 @@ def test_unknown_semgrep_rule_is_not_saved_without_a_catalog_mapping(tmp_path: P
             '{"results": [{"check_id": "unknown.rule"}], "errors": []}', "",
         )
 
-    monkeypatch.setattr(analysis_service.subprocess, "run", fake_run)
+    monkeypatch.setattr(analysis_service, "_run_semgrep_process", fake_run)
 
     async def exercise() -> int:
         async with application.router.lifespan_context(application):
@@ -163,7 +171,7 @@ def test_unknown_semgrep_rule_is_not_saved_without_a_catalog_mapping(tmp_path: P
             transport = ASGITransport(app=application)
             async with AsyncClient(transport=transport, base_url="http://testserver", follow_redirects=False) as client:
                 login = await client.get("/login")
-                await client.post("/login", data={"username": "admin", "password": "admin", "csrf_token": _csrf_token(login.text)})
+                await client.post("/login", data={"username": "admin@company.com", "password": "admin", "csrf_token": _csrf_token(login.text)})
                 detail = await client.get(f"/projects/{project_id}")
                 token = _csrf_token(detail.text)
                 await client.post(f"/projects/{project_id}/analysis", data={"csrf_token": token}, files={"source_file": ("source.zip", _zip_bytes(), "application/zip")})
@@ -173,6 +181,90 @@ def test_unknown_semgrep_rule_is_not_saved_without_a_catalog_mapping(tmp_path: P
     analysis_id = asyncio.run(exercise())
     with Session(application.state.db_engine) as session:
         assert session.scalar(select(Finding).where(Finding.analysis_run_id == analysis_id)) is None
+        run = session.get(AnalysisRun, analysis_id)
+        assert run is not None
+        assert run.summary["finding_count"] == 1
+        assert run.summary["stored_finding_count"] == 0
+
+
+def test_inactive_catalog_rule_does_not_persist_new_findings(
+    tmp_path: Path, monkeypatch
+) -> None:
+    application = create_app(_settings(tmp_path))
+
+    def fake_run(command, **kwargs):
+        result = {
+            "results": [
+                {
+                    "check_id": "test.python.dangerous-call",
+                    "path": "src/vulnerable.py",
+                    "start": {"line": 1, "col": 1},
+                    "end": {"line": 1, "col": 26},
+                    "extra": {
+                        "message": "Unsafe call",
+                        "severity": "ERROR",
+                        "metadata": {"confidence": "HIGH"},
+                    },
+                }
+            ],
+            "errors": [],
+        }
+        return subprocess.CompletedProcess(
+            command, 0, __import__("json").dumps(result), ""
+        )
+
+    monkeypatch.setattr(analysis_service, "_run_semgrep_process", fake_run)
+
+    async def exercise() -> int:
+        async with application.router.lifespan_context(application):
+            project_id = _seed_project_and_rule(application)
+            with Session(application.state.db_engine) as session:
+                rule = session.scalar(
+                    select(Rule).where(Rule.standard_id == "TEST-001")
+                )
+                assert rule is not None
+                rule.is_active = False
+                session.commit()
+
+            transport = ASGITransport(app=application)
+            async with AsyncClient(
+                transport=transport,
+                base_url="http://testserver",
+                follow_redirects=False,
+            ) as client:
+                login = await client.get("/login")
+                await client.post(
+                    "/login",
+                    data={
+                        "username": "admin@company.com",
+                        "password": "admin",
+                        "csrf_token": _csrf_token(login.text),
+                    },
+                )
+                detail = await client.get(f"/projects/{project_id}")
+                token = _csrf_token(detail.text)
+                await client.post(
+                    f"/projects/{project_id}/analysis",
+                    data={"csrf_token": token},
+                    files={
+                        "source_file": (
+                            "source.zip",
+                            _zip_bytes(),
+                            "application/zip",
+                        )
+                    },
+                )
+                response = await client.post(
+                    f"/projects/{project_id}/analysis",
+                    data={"csrf_token": token},
+                )
+                return int(response.headers["location"].rsplit("/", 1)[1])
+
+    analysis_id = asyncio.run(exercise())
+    with Session(application.state.db_engine) as session:
+        assert session.scalar(
+            select(Finding).where(Finding.analysis_run_id == analysis_id)
+        ) is None
         run = session.get(AnalysisRun, analysis_id)
         assert run is not None
         assert run.summary["finding_count"] == 1

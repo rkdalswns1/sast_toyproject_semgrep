@@ -1,4 +1,6 @@
 import asyncio
+import os
+import stat
 from pathlib import Path
 
 from httpx import ASGITransport, AsyncClient
@@ -21,7 +23,7 @@ def test_health_and_database_initialization(tmp_path: Path) -> None:
     settings = Settings(
         app_env="test",
         database_url=f"sqlite:///{database_path}",
-        session_secret="test-session-secret",
+        session_secret="test-session-secret-at-least-32-characters",
         upload_dir=upload_path,
         max_upload_bytes=20 * 1024 * 1024,
         max_extracted_bytes=100 * 1024 * 1024,
@@ -48,3 +50,5 @@ def test_health_and_database_initialization(tmp_path: Path) -> None:
     assert response.json() == {"status": "ok"}
     assert database_path.is_file()
     assert upload_path.is_dir()
+    if os.name == "posix":
+        assert stat.S_IMODE(upload_path.stat().st_mode) == 0o700

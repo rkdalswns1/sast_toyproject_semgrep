@@ -10,6 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.auth.dependencies import current_active_user, get_db, is_admin
+from app.auth.identifiers import AccountIdentifierError, normalize_company_email
 from app.auth.security import verify_password
 from app.auth.services import (
     UserManagementError,
@@ -89,7 +90,13 @@ async def login(
     session: Session = Depends(get_db),
 ) -> Response:
     _csrf_or_403(request, submitted_csrf_token)
-    user = session.scalar(select(User).where(User.username == username.strip()))
+    try:
+        normalized_username = normalize_company_email(
+            username, request.app.state.settings.account_email_domain
+        )
+    except AccountIdentifierError:
+        normalized_username = ""
+    user = session.scalar(select(User).where(User.username == normalized_username))
     if user is None or not user.is_active or not verify_password(password, user.password_hash):
         return _render(
             request,
@@ -169,6 +176,7 @@ async def create_user_page(
             password=password,
             role=_parse_role(role),
             is_active=is_active,
+            email_domain=request.app.state.settings.account_email_domain,
         )
     except UserManagementError as exc:
         return _render(

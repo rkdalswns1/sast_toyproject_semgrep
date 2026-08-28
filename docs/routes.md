@@ -47,6 +47,8 @@ GET  /projects/{project_id}/analysis
 GET  /analysis/{analysis_id}
 ```
 
+`POST /projects/{project_id}/analysis`는 ZIP 업로드와 분석 실행 모두 ADMIN 전용이다. 일반 USER는 할당된 프로젝트의 분석 이력과 완료된 결과를 읽기 전용으로 조회할 수 있다. 분석 실패 원문은 ADMIN에게만 표시한다.
+
 ## Findings
 
 ```text
@@ -55,3 +57,21 @@ GET /findings/{finding_id}
 ```
 
 Finding 목록은 `severity`와 `confidence` query parameter를 지원한다. 권한이 없는 프로젝트나 분석 ID는 정보 노출을 막기 위해 404로 처리한다.
+
+## Rules
+
+```text
+GET  /rules
+GET  /rules/new
+POST /rules
+GET  /rules/{rule_id}
+GET  /rules/{rule_id}/edit
+POST /rules/{rule_id}/edit
+POST /rules/{rule_id}/toggle-active
+```
+
+`/rules`와 `/rules/{rule_id}`는 인증된 ADMIN과 USER가 조회할 수 있다. 검색어, 분류, 구현 상태, 지원 언어, 활성 상태 필터를 지원한다.
+
+`/rules/new`, `POST /rules`, `/rules/{rule_id}/edit`, `POST /rules/{rule_id}/edit`, `POST /rules/{rule_id}/toggle-active`는 ADMIN 전용이다. 등록은 기존 KISA 카탈로그 항목에 언어별 Semgrep Rule ID를 연결하는 동작이며, 공식 KISA ID·명칭·분류·항목 번호를 새로 만들거나 수정하지 않는다.
+
+모든 `POST` 경로는 CSRF 토큰이 필요하다. USER에게 관리 버튼을 표시하지 않고, 직접 관리 URL에 접근하면 `403`으로 처리한다.

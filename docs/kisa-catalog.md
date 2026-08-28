@@ -33,3 +33,7 @@ KISA 카탈로그에 존재한다고 해서 자동 탐지가 구현된 것으로
 - 실제 탐지와 테스트가 존재하는 경우에만 `IMPLEMENTED`로 기록한다.
 - Java, JavaScript, Python 지원 여부를 각각 관리한다.
 - Semgrep 규칙 ID와 KISA 항목의 대응 관계를 명시한다.
+- 동일 KISA 항목의 언어별 Semgrep 규칙은 각 규칙 metadata의 `kisa_standard_id`로 하나의 카탈로그 항목에 연결한다.
+- 공식 가이드의 절 내부 번호를 `item_number`에 저장한다.
+- `reference_info`에는 `소프트웨어 보안약점 진단가이드(2021)`와 공식 절·항목을 기록한다.
+- 카탈로그 seed 항목은 기본적으로 활성 상태로 등록하되, 비활성화해도 기존 Finding과 이력은 유지한다.

@@ -16,7 +16,7 @@ def _settings(tmp_path: Path) -> Settings:
     return Settings(
         app_env="test",
         database_url=f"sqlite:///{tmp_path / 'projects.db'}",
-        session_secret="test-session-secret",
+        session_secret="test-session-secret-at-least-32-characters",
         upload_dir=tmp_path / "uploads",
         max_upload_bytes=20 * 1024 * 1024,
         max_extracted_bytes=100 * 1024 * 1024,
@@ -56,7 +56,7 @@ def test_project_crud_membership_and_access_control(tmp_path: Path) -> None:
             async with AsyncClient(
                 transport=transport, base_url="http://testserver", follow_redirects=False
             ) as admin_client:
-                await _login(admin_client, "admin", "admin")
+                await _login(admin_client, "admin@company.com", "admin")
                 project_list = await admin_client.get("/projects")
                 assert project_list.status_code == 200
                 token = _csrf_token(project_list.text)
@@ -85,7 +85,7 @@ def test_project_crud_membership_and_access_control(tmp_path: Path) -> None:
                 created_user = await admin_client.post(
                     "/users",
                     data={
-                        "username": "member",
+                        "username": "member@company.com",
                         "password": "member-password",
                         "password_confirmation": "member-password",
                         "role": "USER",
@@ -96,7 +96,9 @@ def test_project_crud_membership_and_access_control(tmp_path: Path) -> None:
                 assert created_user.status_code == 303
 
                 with Session(application.state.db_engine) as session:
-                    member = session.scalar(select(User).where(User.username == "member"))
+                    member = session.scalar(
+                        select(User).where(User.username == "member@company.com")
+                    )
                     assert member is not None
                     member_id = member.id
 
@@ -124,10 +126,37 @@ def test_project_crud_membership_and_access_control(tmp_path: Path) -> None:
             async with AsyncClient(
                 transport=transport, base_url="http://testserver", follow_redirects=False
             ) as user_client:
-                await _login(user_client, "member", "member-password")
+                await _login(user_client, "member@company.com", "member-password")
                 project_list = await user_client.get("/projects")
                 assert project_list.status_code == 200
                 assert "Gateway v2" in project_list.text
+                user_token = _csrf_token(project_list.text)
+                assert (
+                    await user_client.post(
+                        "/projects",
+                        data={
+                            "name": "Forbidden project",
+                            "language": "PYTHON",
+                            "csrf_token": user_token,
+                        },
+                    )
+                ).status_code == 403
+                assert (
+                    await user_client.post(
+                        f"/projects/{project_id}/edit",
+                        data={
+                            "name": "Forbidden edit",
+                            "language": "PYTHON",
+                            "csrf_token": user_token,
+                        },
+                    )
+                ).status_code == 403
+                assert (
+                    await user_client.post(
+                        f"/projects/{project_id}/users",
+                        data={"csrf_token": user_token},
+                    )
+                ).status_code == 403
                 assert (await user_client.get(f"/projects/{project_id}")).status_code == 200
                 assert (await user_client.get("/projects/new")).status_code == 403
                 assert (await user_client.get(f"/projects/{project_id}/users")).status_code == 403
@@ -139,7 +168,9 @@ def test_project_crud_membership_and_access_control(tmp_path: Path) -> None:
         assert project is not None
         assert project.description == "Updated description"
         assert project.language.value == "JAVA"
-        member = session.scalar(select(User).where(User.username == "member"))
+        member = session.scalar(
+            select(User).where(User.username == "member@company.com")
+        )
         assert member is not None
         member_ids = set(
             session.scalars(
@@ -159,7 +190,7 @@ def test_unassigned_user_cannot_discover_project(tmp_path: Path) -> None:
             async with AsyncClient(
                 transport=transport, base_url="http://testserver", follow_redirects=False
             ) as admin_client:
-                await _login(admin_client, "admin", "admin")
+                await _login(admin_client, "admin@company.com", "admin")
                 token = _csrf_token((await admin_client.get("/projects")).text)
                 response = await admin_client.post(
                     "/projects",
@@ -170,7 +201,7 @@ def test_unassigned_user_cannot_discover_project(tmp_path: Path) -> None:
                 await admin_client.post(
                     "/users",
                     data={
-                        "username": "outsider",
+                        "username": "outsider@company.com",
                         "password": "outsider-password",
                         "password_confirmation": "outsider-password",
                         "role": "USER",
@@ -182,7 +213,7 @@ def test_unassigned_user_cannot_discover_project(tmp_path: Path) -> None:
             async with AsyncClient(
                 transport=transport, base_url="http://testserver", follow_redirects=False
             ) as user_client:
-                await _login(user_client, "outsider", "outsider-password")
+                await _login(user_client, "outsider@company.com", "outsider-password")
                 assert "Private" not in (await user_client.get("/projects")).text
                 assert (await user_client.get(f"/projects/{project_id}")).status_code == 404
 

@@ -9,7 +9,7 @@
   {% if mode == "create" %}
   <form method="post" action="/users" class="card form-stack">
     <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-    <label>사용자명<input name="username" value="{{ submitted.username if submitted else '' }}" required></label>
+    <label>회사 이메일<input type="email" name="username" value="{{ submitted.username if submitted else '' }}" placeholder="name@{{ request.app.state.settings.account_email_domain }}" required></label>
     <label>비밀번호<input type="password" name="password" required></label>
     <label>비밀번호 확인<input type="password" name="password_confirmation" required></label>
     <label>역할<select name="role"><option value="USER" {% if submitted and submitted.role == 'USER' %}selected{% endif %}>USER</option><option value="ADMIN" {% if submitted and submitted.role == 'ADMIN' %}selected{% endif %}>ADMIN</option></select></label>

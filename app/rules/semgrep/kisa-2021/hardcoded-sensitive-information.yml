@@ -1,0 +1,42 @@
+rules:
+  - id: kisa-2021-hardcoded-sensitive-information-python
+    languages: [python]
+    severity: ERROR
+    message: Sensitive information appears to be hardcoded in source code.
+    metadata:
+      kisa_standard_id: 제2절-6
+      confidence: MEDIUM
+      recommendation: Load secrets from a protected configuration source instead of source code.
+    patterns:
+      - pattern: $NAME = "..."
+      - metavariable-regex:
+          metavariable: $NAME
+          regex: (?i).*(password|secret|token|api_key).*
+
+  - id: kisa-2021-hardcoded-sensitive-information-java
+    languages: [java]
+    severity: ERROR
+    message: Sensitive information appears to be hardcoded in source code.
+    metadata:
+      kisa_standard_id: 제2절-6
+      confidence: MEDIUM
+      recommendation: Load secrets from a protected configuration source instead of source code.
+    patterns:
+      - pattern: String $NAME = "...";
+      - metavariable-regex:
+          metavariable: $NAME
+          regex: (?i).*(password|secret|token|apiKey|api_key).*
+
+  - id: kisa-2021-hardcoded-sensitive-information-javascript
+    languages: [javascript]
+    severity: ERROR
+    message: Sensitive information appears to be hardcoded in source code.
+    metadata:
+      kisa_standard_id: 제2절-6
+      confidence: MEDIUM
+      recommendation: Load secrets from a protected configuration source instead of source code.
+    patterns:
+      - pattern: $NAME = "..."
+      - metavariable-regex:
+          metavariable: $NAME
+          regex: (?i).*(password|secret|token|apiKey|api_key).*

@@ -8,6 +8,7 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.db.models.analysis_run import AnalysisRun
 from app.db.models.enums import Confidence, Severity
 from app.db.models.finding import Finding
 from app.db.models.rule import Rule
@@ -63,29 +64,45 @@ def persist_normalized_findings(
     session: Session,
     *,
     analysis_run_id: int,
-    language,
     semgrep_result: dict[str, Any],
     source_root: Path,
 ) -> int:
-    """Persist results mapped to an existing catalog rule; never invent one."""
+    """Persist results mapped to a compatible catalog rule; never invent one."""
+    analysis_run = session.get(AnalysisRun, analysis_run_id)
+    if analysis_run is None:
+        raise FindingNormalizationError("분석 실행을 찾을 수 없습니다.")
+    language = analysis_run.language
+
     results = semgrep_result.get("results")
     if not isinstance(results, list):
         raise FindingNormalizationError("Semgrep 결과를 처리하지 못했습니다.")
 
     check_ids: set[str] = set()
+    standard_ids: set[str] = set()
     for item in results:
         if isinstance(item, dict) and isinstance(item.get("check_id"), str):
             check_id = item["check_id"]
             check_ids.add(check_id)
             check_ids.add(check_id.rsplit(".", 1)[-1])
-    if not check_ids:
+            extra = item.get("extra")
+            metadata = extra.get("metadata") if isinstance(extra, dict) else None
+            if isinstance(metadata, dict) and isinstance(
+                metadata.get("kisa_standard_id"), str
+            ):
+                standard_ids.add(metadata["kisa_standard_id"])
+    if not check_ids and not standard_ids:
         return 0
     rules = session.scalars(
-        select(Rule).where(Rule.semgrep_rule_id.in_(check_ids))
+        select(Rule).where(
+            Rule.is_active.is_(True),
+            (Rule.semgrep_rule_id.in_(check_ids))
+            | (Rule.standard_id.in_(standard_ids)),
+        )
     ).all()
     rules_by_semgrep_id = {
         rule.semgrep_rule_id: rule for rule in rules if rule.semgrep_rule_id is not None
     }
+    rules_by_standard_id = {rule.standard_id: rule for rule in rules}
 
     findings: list[Finding] = []
     for item in results:
@@ -96,16 +113,20 @@ def persist_normalized_findings(
         if rule is None and isinstance(check_id, str):
             # Semgrep prefixes local YAML rule IDs with the configuration path.
             rule = rules_by_semgrep_id.get(check_id.rsplit(".", 1)[-1])
+        extra = item.get("extra")
+        metadata = extra.get("metadata") if isinstance(extra, dict) else None
+        metadata = metadata if isinstance(metadata, dict) else {}
+        if rule is None and isinstance(metadata.get("kisa_standard_id"), str):
+            rule = rules_by_standard_id.get(metadata["kisa_standard_id"])
         if rule is None:
             # Rule catalog ownership starts in Phase 8. Until then an unmapped
             # engine result must not produce a fabricated KISA association.
             continue
+        if language.value not in rule.supported_languages:
+            continue
 
-        extra = item.get("extra")
         if not isinstance(extra, dict):
             raise FindingNormalizationError("Semgrep 결과의 메타데이터를 처리하지 못했습니다.")
-        metadata = extra.get("metadata")
-        metadata = metadata if isinstance(metadata, dict) else {}
         message = extra.get("message")
         if not isinstance(message, str) or not message.strip():
             raise FindingNormalizationError("Semgrep 결과에 메시지가 없습니다.")

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import shutil
 import stat
 import uuid
@@ -18,6 +19,12 @@ COPY_CHUNK_BYTES = 1024 * 1024
 
 class SourceUploadError(ValueError):
     """Raised when an uploaded archive violates the upload contract."""
+
+
+def _ensure_private_directory(path: Path) -> None:
+    path.mkdir(mode=0o700, parents=True, exist_ok=True)
+    if os.name == "posix":
+        path.chmod(0o700)
 
 
 def _is_unsafe_zip_member(info: zipfile.ZipInfo) -> bool:
@@ -46,6 +53,8 @@ def _validate_zip(zip_file: zipfile.ZipFile, settings: Settings) -> None:
     for info in infos:
         if _is_unsafe_zip_member(info):
             raise SourceUploadError("안전하지 않은 ZIP 경로 또는 파일 형식입니다.")
+        if info.flag_bits & 0x1:
+            raise SourceUploadError("암호화된 ZIP 파일은 허용되지 않습니다.")
         if info.filename in member_names:
             raise SourceUploadError("중복된 ZIP 경로는 허용되지 않습니다.")
         member_names.add(info.filename)
@@ -59,7 +68,7 @@ def _validate_zip(zip_file: zipfile.ZipFile, settings: Settings) -> None:
 
 
 def _extract_zip(archive_path: Path, destination: Path, settings: Settings) -> None:
-    destination.mkdir(parents=True, exist_ok=False)
+    destination.mkdir(mode=0o700, parents=True, exist_ok=False)
     destination_root = destination.resolve()
     extracted_size = 0
 
@@ -72,10 +81,10 @@ def _extract_zip(archive_path: Path, destination: Path, settings: Settings) -> N
                 if not resolved_target.is_relative_to(destination_root):
                     raise SourceUploadError("ZIP 경로가 작업 디렉터리를 벗어납니다.")
                 if info.is_dir():
-                    resolved_target.mkdir(parents=True, exist_ok=True)
+                    _ensure_private_directory(resolved_target)
                     continue
 
-                resolved_target.parent.mkdir(parents=True, exist_ok=True)
+                _ensure_private_directory(resolved_target.parent)
                 with zip_file.open(info) as source, resolved_target.open("xb") as output:
                     member_size = 0
                     while chunk := source.read(COPY_CHUNK_BYTES):
@@ -86,7 +95,7 @@ def _extract_zip(archive_path: Path, destination: Path, settings: Settings) -> N
                         if extracted_size > settings.max_extracted_bytes:
                             raise SourceUploadError("압축 해제 후 전체 크기 제한을 초과했습니다.")
                         output.write(chunk)
-    except zipfile.BadZipFile as exc:
+    except (NotImplementedError, RuntimeError, zipfile.BadZipFile) as exc:
         raise SourceUploadError("유효한 ZIP 파일이 아닙니다.") from exc
 
 
@@ -101,8 +110,9 @@ async def save_project_source(
     upload_root = settings.upload_dir.resolve()
     incoming_dir = upload_root / ".incoming"
     staging_dir = upload_root / ".staging"
-    incoming_dir.mkdir(parents=True, exist_ok=True)
-    staging_dir.mkdir(parents=True, exist_ok=True)
+    _ensure_private_directory(upload_root)
+    _ensure_private_directory(incoming_dir)
+    _ensure_private_directory(staging_dir)
 
     upload_id = uuid.uuid4().hex
     incoming_archive = incoming_dir / f"{upload_id}.zip"
@@ -121,11 +131,11 @@ async def save_project_source(
         if not zipfile.is_zipfile(incoming_archive):
             raise SourceUploadError("유효한 ZIP 파일이 아닙니다.")
 
-        staged_workspace.mkdir(parents=True, exist_ok=False)
+        staged_workspace.mkdir(mode=0o700, parents=True, exist_ok=False)
         archive_path = staged_workspace / "source.zip"
         incoming_archive.replace(archive_path)
         _extract_zip(archive_path, staged_workspace / "extracted", settings)
-        final_workspace.parent.mkdir(parents=True, exist_ok=True)
+        _ensure_private_directory(final_workspace.parent)
         staged_workspace.replace(final_workspace)
         return final_workspace / "extracted"
     except SourceUploadError:

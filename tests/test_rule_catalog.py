@@ -1,11 +1,13 @@
 import asyncio
 from pathlib import Path
 
+import pytest
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.analysis.service import execute_project_analysis
 from app.config import Settings
+from app.db.models.analysis_run import AnalysisRun
 from app.db.models.enums import ImplementationStatus, Language
 from app.db.models.finding import Finding
 from app.db.models.rule import Rule
@@ -18,7 +20,7 @@ from app.rules.catalog import KISA_2021_CATALOG
 def _settings(tmp_path: Path) -> Settings:
     return Settings(
         app_env="test", database_url=f"sqlite:///{tmp_path / 'rules.db'}",
-        session_secret="test-session-secret", upload_dir=tmp_path / "uploads",
+        session_secret="test-session-secret-at-least-32-characters", upload_dir=tmp_path / "uploads",
         max_upload_bytes=20 * 1024 * 1024, max_extracted_bytes=100 * 1024 * 1024,
         max_archive_files=2_000, max_single_file_bytes=10 * 1024 * 1024,
         semgrep_timeout_seconds=60, template_dir=Path("app/templates").resolve(),
@@ -33,14 +35,30 @@ def test_kisa_2021_catalog_seeds_all_49_official_items_idempotently(tmp_path: Pa
         async with application.router.lifespan_context(application):
             with Session(application.state.db_engine) as session:
                 assert session.scalar(select(func.count()).select_from(Rule)) == 49
+                rules = session.scalars(select(Rule)).all()
+                assert len({rule.standard_id for rule in rules}) == 49
+                for rule in rules:
+                    assert rule.id is not None
+                    assert rule.standard_id.strip()
+                    assert rule.category.strip()
+                    assert rule.item_number >= 1
+                    assert rule.name.strip()
+                    assert isinstance(rule.implementation_status, ImplementationStatus)
                 sql_injection = session.scalar(
                     select(Rule).where(Rule.standard_id == "제1절-1")
                 )
                 assert sql_injection is not None
                 assert sql_injection.name == "SQL 삽입"
                 assert sql_injection.category == "입력데이터 검증 및 표현"
+                assert sql_injection.item_number == 1
+                assert "진단가이드(2021)" in sql_injection.reference_info
+                assert sql_injection.is_active is True
                 assert sql_injection.semgrep_rule_id == "kisa-2021-sql-injection-python"
-                assert sql_injection.supported_languages == [Language.PYTHON.value]
+                assert sql_injection.supported_languages == [
+                    Language.JAVA.value,
+                    Language.JAVASCRIPT.value,
+                    Language.PYTHON.value,
+                ]
                 assert sql_injection.implementation_status is ImplementationStatus.PARTIAL
                 not_implemented = session.scalar(
                     select(Rule).where(Rule.standard_id == "제1절-2")
@@ -48,10 +66,17 @@ def test_kisa_2021_catalog_seeds_all_49_official_items_idempotently(tmp_path: Pa
                 assert not_implemented is not None
                 assert not_implemented.implementation_status is ImplementationStatus.NOT_IMPLEMENTED
                 assert not_implemented.supported_languages == []
+                sql_injection.is_active = False
+                session.commit()
 
         async with application.router.lifespan_context(application):
             with Session(application.state.db_engine) as session:
                 assert session.scalar(select(func.count()).select_from(Rule)) == 49
+                sql_injection = session.scalar(
+                    select(Rule).where(Rule.standard_id == "제1절-1")
+                )
+                assert sql_injection is not None
+                assert sql_injection.is_active is False
 
     assert len(KISA_2021_CATALOG) == 49
     asyncio.run(exercise())
@@ -64,7 +89,7 @@ def test_mapped_local_semgrep_rules_persist_findings_for_supported_language(tmp_
     async def exercise() -> tuple[int, int]:
         async with application.router.lifespan_context(application):
             with Session(application.state.db_engine) as session:
-                admin = session.scalar(select(User).where(User.username == "admin"))
+                admin = session.scalar(select(User).where(User.username == "admin@company.com"))
                 assert admin is not None
                 admin_id = admin.id
             with Session(application.state.db_engine) as session:
@@ -74,7 +99,14 @@ def test_mapped_local_semgrep_rules_persist_findings_for_supported_language(tmp_
                 )
                 project_id = project.id
 
-            source_path = settings.upload_dir / "catalog-rule-test" / "source"
+            source_path = (
+                settings.upload_dir
+                / "projects"
+                / str(project_id)
+                / "sources"
+                / "catalog-rule-test"
+                / "extracted"
+            )
             source_path.mkdir(parents=True)
             (source_path / "vulnerable.py").write_text(
                 "import hashlib\nimport subprocess\n"
@@ -100,3 +132,101 @@ def test_mapped_local_semgrep_rules_persist_findings_for_supported_language(tmp_
         }
         assert {finding.file_path for finding in findings} == {"vulnerable.py"}
         assert all(finding.raw_result["path"].startswith(str(settings.upload_dir)) for finding in findings)
+
+
+@pytest.mark.parametrize(
+    ("language", "filename", "source"),
+    (
+        (
+            Language.JAVA,
+            "Vulnerable.java",
+            """
+import java.security.MessageDigest;
+import java.sql.Statement;
+class Vulnerable {
+    void run(Statement statement, String userInput) throws Exception {
+        statement.executeQuery("SELECT * FROM users WHERE name=" + userInput);
+        Runtime.getRuntime().exec(userInput);
+        String password = "secret";
+        MessageDigest.getInstance("MD5");
+    }
+}
+""",
+        ),
+        (
+            Language.JAVASCRIPT,
+            "vulnerable.js",
+            """
+const child_process = require("child_process");
+const crypto = require("crypto");
+function run(db, userInput) {
+  db.query("SELECT * FROM users WHERE name=" + userInput);
+  child_process.exec(userInput);
+  const password = "secret";
+  crypto.createHash("md5");
+}
+""",
+        ),
+    ),
+)
+def test_java_and_javascript_use_the_same_four_kisa_rules(
+    tmp_path: Path, language: Language, filename: str, source: str
+) -> None:
+    settings = _settings(tmp_path)
+    application = create_app(settings)
+
+    async def exercise() -> int:
+        async with application.router.lifespan_context(application):
+            with Session(application.state.db_engine) as session:
+                admin = session.scalar(
+                    select(User).where(User.username == "admin@company.com")
+                )
+                assert admin is not None
+                admin_id = admin.id
+            with Session(application.state.db_engine) as session:
+                project = create_project(
+                    session,
+                    name=f"{language.value} rule target",
+                    description=None,
+                    language=language,
+                    created_by=admin_id,
+                )
+                project_id = project.id
+            source_path = (
+                settings.upload_dir
+                / "projects"
+                / str(project_id)
+                / "sources"
+                / language.value.lower()
+                / "extracted"
+            )
+            source_path.mkdir(parents=True)
+            (source_path / filename).write_text(source, encoding="utf-8")
+            with Session(application.state.db_engine) as session:
+                update_project_source(
+                    session, project_id=project_id, source_path=source_path
+                )
+                run = execute_project_analysis(
+                    session,
+                    project_id=project_id,
+                    executed_by=admin_id,
+                    settings=settings,
+                )
+                assert run.status is not None
+                return run.id
+
+    analysis_id = asyncio.run(exercise())
+    with Session(application.state.db_engine) as session:
+        run = session.get(AnalysisRun, analysis_id)
+        assert run is not None
+        assert run.status.value == "COMPLETED"
+        findings = session.scalars(
+            select(Finding).where(Finding.analysis_run_id == analysis_id)
+        ).all()
+        assert {finding.rule_name for finding in findings} == {
+            "SQL 삽입",
+            "운영체제 명령어 삽입",
+            "하드코드된 중요정보",
+            "취약한 암호화 알고리즘 사용",
+        }
+        assert {finding.language for finding in findings} == {language}

@@ -17,9 +17,13 @@
 - Test framework: pytest
 - Python: 3.12
 - Database initialization: SQLAlchemy `create_all()`
+- Schema history: repo-local ordered migrations recorded in `schema_versions`
 - Configuration: environment variables loaded from `.env`
-- Bootstrap administrator: `admin` / `admin`, password stored as bcrypt hash
+- Account identifier: company email ending in `@company.com`
+- Bootstrap administrator: `admin@company.com` / `admin`, password stored as bcrypt hash
 - Semgrep timeout: 60 seconds
+- Session secret: at least 32 bytes and never the example placeholder
+- Semgrep resource limits: 2 jobs, 1,024 MiB memory, 1,000,000-byte target, 20 MiB JSON output
 
 ## Rules
 
@@ -36,6 +40,12 @@
 11. KISA 카탈로그는 `docs/kisa-catalog.md`를 따른다.
 12. KISA 49개 항목은 사용자가 제공한 공식 자료 없이 추측하여 작성하지 않는다.
 13. Python 패키지 버전은 루트 `requirements.txt`에 고정한다.
+14. ZIP 소스 업로드, 프로젝트 변경, 분석 실행 및 분석 오류 원문 조회는 ADMIN만 수행한다.
+15. 일반 USER는 할당된 프로젝트의 분석 이력과 Finding만 읽기 전용으로 조회한다.
+16. `create_all()` 이후 `app/db/migrations.py`의 버전 마이그레이션을 적용하고 성공한 버전을 `schema_versions`에 기록한다.
+17. 보안 통제와 외부 구성요소 관리 절차는 `docs/security.md`를 따른다.
+18. RFP 시험 기준, 정상·취약 샘플 및 기대 결과는 `docs/testing.md`와 `tests/samples/`를 따른다.
+19. 모듈 소유권, 진단 항목 독립성, 확장 및 데이터 정합성은 `docs/quality.md`를 따른다.
 
 ## First Instruction
 

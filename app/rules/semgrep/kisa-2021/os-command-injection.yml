@@ -1,0 +1,30 @@
+rules:
+  - id: kisa-2021-os-command-injection-python
+    languages: [python]
+    severity: ERROR
+    message: A shell command is executed with shell=True.
+    metadata:
+      kisa_standard_id: 제1절-5
+      confidence: HIGH
+      recommendation: Avoid shell=True and pass a fixed command with validated arguments.
+    pattern: subprocess.$METHOD($COMMAND, shell=True)
+
+  - id: kisa-2021-os-command-injection-java
+    languages: [java]
+    severity: ERROR
+    message: An operating system command is executed with dynamic input.
+    metadata:
+      kisa_standard_id: 제1절-5
+      confidence: HIGH
+      recommendation: Avoid Runtime.exec with untrusted input and use fixed validated arguments.
+    pattern: Runtime.getRuntime().exec($COMMAND)
+
+  - id: kisa-2021-os-command-injection-javascript
+    languages: [javascript]
+    severity: ERROR
+    message: An operating system command is executed with dynamic input.
+    metadata:
+      kisa_standard_id: 제1절-5
+      confidence: HIGH
+      recommendation: Avoid child_process.exec with untrusted input and use fixed validated arguments.
+    pattern: child_process.exec($COMMAND)

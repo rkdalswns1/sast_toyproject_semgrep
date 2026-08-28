@@ -29,12 +29,14 @@ scripts/
 uploads/
 ```
 
-`app/rules/`는 규칙 카탈로그와 애플리케이션 로직을 담당하고, `scripts/`는 seed와 관리용 일회성 작업만 담당한다.
+`app/auth/`, `app/projects/`, `app/analysis/`, `app/findings/`, `app/rules/`는 각각 인증, 프로젝트, 분석 실행, 정규화 결과, 진단 항목의 서비스와 라우트를 소유한다. 프로젝트 접근 검사는 `app/projects/access.py`를 공유하되 분석과 Finding URL 라우트는 각 책임 모듈에 둔다.
+
+`app/rules/semgrep/kisa-2021/`는 KISA 진단 항목마다 독립 YAML 파일 하나를 두고, `scripts/`는 seed와 관리용 일회성 작업만 담당한다. 세부 품질·확장 계약은 `quality.md`를 따른다.
 
 ## Analysis Flow
 
 ```text
-ZIP upload → safe extraction → language detection → Semgrep
+ZIP upload → safe extraction → registered-language detection → Semgrep
 → JSON result → normalizer → Finding persistence → result pages
 ```
 
@@ -42,13 +44,27 @@ ZIP upload → safe extraction → language detection → Semgrep
 
 분석은 MVP에서 HTTP 요청 안에서 동기 실행한다. 분석 요청을 받으면 AnalysisRun을 `RUNNING` 상태로 변경하고 Semgrep을 실행한다. 성공하면 `COMPLETED`, 오류 또는 시간초과가 발생하면 `FAILED`로 변경한다.
 
-Semgrep 실행 제한 시간은 기본 60초이며 환경변수로 조정할 수 있다.
+Semgrep 실행 제한 시간은 기본 60초이며 환경변수로 조정할 수 있다. 동시 작업 수, 규칙별 메모리, 대상 파일 크기와 JSON 출력 크기도 제한한다. 실행 프로세스는 별도 프로세스 그룹에서 시작하고 timeout 또는 출력 제한 초과 시 그룹 전체를 종료한다.
+
+저장된 소스 경로는 DB 값을 그대로 신뢰하지 않고 `uploads/projects/{project_id}/sources/` 하위인지 다시 검증한다. 분석마다 소유자 전용 임시 작업 디렉터리를 만들고 정규 파일만 복사하며, 성공·실패와 관계없이 실행 후 삭제한다.
+
+지원 언어의 표시명, 확장자 및 Semgrep 언어명은 중앙 language registry에서 관리한다. 프로젝트 폼과 분석 전 언어 식별은 같은 registry를 참조한다. 새 언어는 공통 분석 흐름이나 Finding 모델을 복제하지 않고 registry와 해당 Semgrep 규칙을 추가하여 확장한다. Finding 언어는 부모 AnalysisRun에서 파생하고 해당 언어를 지원하는 Rule만 연결한다.
+
+각 AnalysisRun의 `summary.provenance`에는 다음 재현성 정보를 기록한다.
+
+- 분석에 사용한 소스 스냅샷의 업로드 루트 기준 상대 경로
+- 정렬된 소스 트리의 SHA-256
+- Semgrep 버전
+- 로컬 규칙 세트 SHA-256
+- 식별된 소스 언어
 
 ## Database Initialization
 
 MVP에서는 Alembic을 사용하지 않는다.
 
-애플리케이션 시작 시 SQLAlchemy `create_all()`을 사용하여 존재하지 않는 테이블을 생성한다.
+애플리케이션 시작 시 SQLAlchemy `create_all()`을 사용하여 존재하지 않는 테이블을 생성한 뒤, `app/db/migrations.py`의 순서가 고정된 경량 마이그레이션을 적용한다.
+
+적용이 완료된 버전, 설명 및 적용 시각은 `schema_versions`에 기록한다. 동일한 버전은 다시 실행하지 않는다. 기존 SQLite DB의 컬럼 추가는 마이그레이션이 담당하며, 신규 DB는 최신 모델로 생성한 후 같은 버전을 이력으로 기록한다.
 
 SQLite 연결마다 foreign key 검사를 활성화한다.
 

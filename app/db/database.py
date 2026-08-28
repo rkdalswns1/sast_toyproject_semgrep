@@ -8,6 +8,7 @@ from sqlalchemy import Engine, create_engine, event
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.db.base import Base
+from app.db.migrations import apply_schema_migrations
 
 
 def create_db_engine(database_url: str) -> Engine:
@@ -36,3 +37,4 @@ def initialize_database(engine: Engine) -> None:
     import app.db.models  # noqa: F401
 
     Base.metadata.create_all(bind=engine)
+    apply_schema_migrations(engine)

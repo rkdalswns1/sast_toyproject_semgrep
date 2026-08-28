@@ -6,6 +6,7 @@ from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from app.auth.identifiers import AccountIdentifierError, normalize_company_email
 from app.auth.security import hash_password
 from app.db.models.enums import UserRole
 from app.db.models.user import User
@@ -15,19 +16,37 @@ class UserManagementError(ValueError):
     """Raised when an account operation violates the fixed policy."""
 
 
-def bootstrap_administrator(session: Session) -> None:
-    """Create the documented administrator only when no users exist."""
+def bootstrap_administrator(
+    session: Session, *, email_domain: str = "company.com"
+) -> None:
+    """Create the company administrator and migrate the legacy MVP identifier."""
+    administrator_identifier = normalize_company_email(
+        f"admin@{email_domain}", email_domain
+    )
     with session.begin():
         has_users = session.scalar(select(User.id).limit(1)) is not None
         if not has_users:
             session.add(
                 User(
-                    username="admin",
+                    username=administrator_identifier,
                     password_hash=hash_password("admin"),
                     role=UserRole.ADMIN,
                     is_active=True,
                 )
             )
+            return
+
+        company_admin_exists = session.scalar(
+            select(User.id).where(User.username == administrator_identifier)
+        )
+        if company_admin_exists is None:
+            legacy_admin = session.scalar(
+                select(User).where(
+                    User.username == "admin", User.role == UserRole.ADMIN
+                )
+            )
+            if legacy_admin is not None:
+                legacy_admin.username = administrator_identifier
 
 
 def create_user(
@@ -37,10 +56,12 @@ def create_user(
     password: str,
     role: UserRole,
     is_active: bool,
+    email_domain: str = "company.com",
 ) -> User:
-    normalized_username = username.strip()
-    if not normalized_username:
-        raise UserManagementError("사용자명은 필수입니다.")
+    try:
+        normalized_username = normalize_company_email(username, email_domain)
+    except AccountIdentifierError as exc:
+        raise UserManagementError(str(exc)) from exc
     if not password:
         raise UserManagementError("비밀번호는 필수입니다.")
 

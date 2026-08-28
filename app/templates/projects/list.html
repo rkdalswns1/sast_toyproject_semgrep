@@ -7,6 +7,7 @@
   <header class="page-header">
     <div><p class="eyebrow">SecureScan{% if is_admin %} · ADMIN{% endif %}</p><h1>프로젝트 목록</h1></div>
     <div class="header-actions">
+      <a class="secondary button catalog-action" href="/rules">KISA 규칙 카탈로그</a>
       {% if is_admin %}<a class="button" href="/projects/new">+ 프로젝트 생성</a><a class="secondary button" href="/users">사용자 관리</a>{% endif %}
       <span>{{ current_user.username }}</span>
       <form method="post" action="/logout"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button class="secondary" type="submit">로그아웃</button></form>

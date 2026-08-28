@@ -1,0 +1,36 @@
+rules:
+  - id: kisa-2021-weak-crypto-python
+    languages: [python]
+    severity: WARNING
+    message: A weak cryptographic hash algorithm is used.
+    metadata:
+      kisa_standard_id: 제2절-4
+      confidence: HIGH
+      recommendation: Use a modern cryptographic algorithm suitable for the security purpose.
+    pattern-either:
+      - pattern: hashlib.md5(...)
+      - pattern: hashlib.sha1(...)
+
+  - id: kisa-2021-weak-crypto-java
+    languages: [java]
+    severity: WARNING
+    message: A weak cryptographic hash algorithm is used.
+    metadata:
+      kisa_standard_id: 제2절-4
+      confidence: HIGH
+      recommendation: Use a modern cryptographic algorithm suitable for the security purpose.
+    pattern-either:
+      - pattern: MessageDigest.getInstance("MD5")
+      - pattern: MessageDigest.getInstance("SHA-1")
+
+  - id: kisa-2021-weak-crypto-javascript
+    languages: [javascript]
+    severity: WARNING
+    message: A weak cryptographic hash algorithm is used.
+    metadata:
+      kisa_standard_id: 제2절-4
+      confidence: HIGH
+      recommendation: Use a modern cryptographic algorithm suitable for the security purpose.
+    pattern-either:
+      - pattern: crypto.createHash("md5")
+      - pattern: crypto.createHash("sha1")

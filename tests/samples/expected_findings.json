@@ -1,0 +1,32 @@
+{
+  "PYTHON": {
+    "vulnerable_file": "vulnerable.py",
+    "safe_file": "safe.py",
+    "findings": {
+      "제1절-1": {"line": 3, "severity": "HIGH", "confidence": "HIGH"},
+      "제1절-5": {"line": 4, "severity": "HIGH", "confidence": "HIGH"},
+      "제2절-6": {"line": 5, "severity": "HIGH", "confidence": "MEDIUM"},
+      "제2절-4": {"line": 6, "severity": "MEDIUM", "confidence": "HIGH"}
+    }
+  },
+  "JAVA": {
+    "vulnerable_file": "Vulnerable.java",
+    "safe_file": "Safe.java",
+    "findings": {
+      "제1절-1": {"line": 5, "severity": "HIGH", "confidence": "HIGH"},
+      "제1절-5": {"line": 6, "severity": "HIGH", "confidence": "HIGH"},
+      "제2절-6": {"line": 7, "severity": "HIGH", "confidence": "MEDIUM"},
+      "제2절-4": {"line": 8, "severity": "MEDIUM", "confidence": "HIGH"}
+    }
+  },
+  "JAVASCRIPT": {
+    "vulnerable_file": "vulnerable.js",
+    "safe_file": "safe.js",
+    "findings": {
+      "제1절-1": {"line": 4, "severity": "HIGH", "confidence": "HIGH"},
+      "제1절-5": {"line": 5, "severity": "HIGH", "confidence": "HIGH"},
+      "제2절-6": {"line": 6, "severity": "HIGH", "confidence": "MEDIUM"},
+      "제2절-4": {"line": 7, "severity": "MEDIUM", "confidence": "HIGH"}
+    }
+  }
+}

@@ -11,6 +11,7 @@ from app.db.models.enums import ImplementationStatus, Language, Severity
 class CatalogEntry:
     standard_id: str
     category: str
+    item_number: int
     name: str
     severity: Severity
     supported_languages: tuple[Language, ...] = ()
@@ -21,6 +22,13 @@ class CatalogEntry:
     def description(self) -> str:
         return f"KISA 「소프트웨어 보안약점 진단가이드(2021)」의 ‘{self.name}’ 항목."
 
+    @property
+    def reference_info(self) -> str:
+        return (
+            "KISA 소프트웨어 보안약점 진단가이드(2021) "
+            f"{self.standard_id} {self.name}"
+        )
+
 
 _INPUT_VALIDATION = "입력데이터 검증 및 표현"
 _SECURITY_FUNCTION = "보안기능"
@@ -29,6 +37,11 @@ _ERROR_HANDLING = "에러처리"
 _CODE_ERROR = "코드오류"
 _ENCAPSULATION = "캡슐화"
 _API_MISUSE = "API 오용"
+_INITIAL_RULE_LANGUAGES = (
+    Language.JAVA,
+    Language.JAVASCRIPT,
+    Language.PYTHON,
+)
 
 
 def _entry(
@@ -44,6 +57,7 @@ def _entry(
     return CatalogEntry(
         standard_id=f"제{section}절-{number}",
         category=category,
+        item_number=number,
         name=name,
         severity=severity,
         supported_languages=languages,
@@ -55,11 +69,11 @@ def _entry(
 # The official guide uses a section and within-section item number, rather than
 # a separate KISA code. Those source identifiers are retained verbatim here.
 KISA_2021_CATALOG: tuple[CatalogEntry, ...] = (
-    _entry(1, 1, _INPUT_VALIDATION, "SQL 삽입", Severity.HIGH, (Language.PYTHON,), ImplementationStatus.PARTIAL, "kisa-2021-sql-injection-python"),
+    _entry(1, 1, _INPUT_VALIDATION, "SQL 삽입", Severity.HIGH, _INITIAL_RULE_LANGUAGES, ImplementationStatus.PARTIAL, "kisa-2021-sql-injection-python"),
     _entry(1, 2, _INPUT_VALIDATION, "코드삽입"),
     _entry(1, 3, _INPUT_VALIDATION, "경로 조작 및 자원 삽입"),
     _entry(1, 4, _INPUT_VALIDATION, "크로스사이트 스크립트"),
-    _entry(1, 5, _INPUT_VALIDATION, "운영체제 명령어 삽입", Severity.HIGH, (Language.PYTHON,), ImplementationStatus.PARTIAL, "kisa-2021-os-command-injection-python"),
+    _entry(1, 5, _INPUT_VALIDATION, "운영체제 명령어 삽입", Severity.HIGH, _INITIAL_RULE_LANGUAGES, ImplementationStatus.PARTIAL, "kisa-2021-os-command-injection-python"),
     _entry(1, 6, _INPUT_VALIDATION, "위험한 형식 파일 업로드"),
     _entry(1, 7, _INPUT_VALIDATION, "신뢰되지 않는 URL 주소로 자동접속 연결"),
     _entry(1, 8, _INPUT_VALIDATION, "부적절한 XML 외부개체 참조"),
@@ -75,9 +89,9 @@ KISA_2021_CATALOG: tuple[CatalogEntry, ...] = (
     _entry(2, 1, _SECURITY_FUNCTION, "적절한 인증 없는 중요기능 허용"),
     _entry(2, 2, _SECURITY_FUNCTION, "부적절한 인가"),
     _entry(2, 3, _SECURITY_FUNCTION, "중요한 자원에 대한 잘못된 권한 설정"),
-    _entry(2, 4, _SECURITY_FUNCTION, "취약한 암호화 알고리즘 사용", Severity.MEDIUM, (Language.PYTHON,), ImplementationStatus.PARTIAL, "kisa-2021-weak-crypto-python"),
+    _entry(2, 4, _SECURITY_FUNCTION, "취약한 암호화 알고리즘 사용", Severity.MEDIUM, _INITIAL_RULE_LANGUAGES, ImplementationStatus.PARTIAL, "kisa-2021-weak-crypto-python"),
     _entry(2, 5, _SECURITY_FUNCTION, "암호화되지 않은 중요정보"),
-    _entry(2, 6, _SECURITY_FUNCTION, "하드코드된 중요정보", Severity.HIGH, (Language.PYTHON,), ImplementationStatus.PARTIAL, "kisa-2021-hardcoded-sensitive-information-python"),
+    _entry(2, 6, _SECURITY_FUNCTION, "하드코드된 중요정보", Severity.HIGH, _INITIAL_RULE_LANGUAGES, ImplementationStatus.PARTIAL, "kisa-2021-hardcoded-sensitive-information-python"),
     _entry(2, 7, _SECURITY_FUNCTION, "충분하지 않은 키 길이 사용"),
     _entry(2, 8, _SECURITY_FUNCTION, "적절하지 않은 난수 값 사용"),
     _entry(2, 9, _SECURITY_FUNCTION, "취약한 비밀번호 허용"),

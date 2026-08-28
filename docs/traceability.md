@@ -3,32 +3,103 @@
 Phase 9 verification matrix. Test files use a temporary SQLite database and an
 isolated upload directory; no test uses the developer's local project data.
 
+## System Functional Requirement Status
+
+| RFP ID | Status | Implementation / evidence |
+|---|---|---|
+| SFR-001 | Implemented | Company email validation in `app/auth/identifiers.py`; bootstrap and rejection tests in `tests/test_authentication.py` |
+| SFR-003 | Implemented | ADMIN/USER checks in auth and project routes; read-only USER integration assertions in `tests/test_end_to_end.py` |
+| SFR-008 | Implemented | ZIP upload and Semgrep execution POST are ADMIN-only in `app/projects/routes.py` |
+| SFR-009 | Implemented | Per-run source/ruleset hashes, source snapshot, engine version and detected language in `AnalysisRun.summary.provenance` |
+| SFR-010 | Implemented | Central registry and extension-based detection in `app/analysis/languages.py`; project forms and scanner use the same profiles |
+| SFR-011 | Implemented (PARTIAL rules) | Java, JavaScript and Python each map the same four initial KISA items; real-engine tests in `tests/test_rule_catalog.py` |
+| SFR-012 | Implemented | ADMIN language-specific Semgrep mapping registration, edit and activation management in `app/rules/routes.py`, `app/rules/services.py`, and `diagnostic_rules` |
+| SFR-013 | Implemented | Authenticated catalog list/detail, filters and ADMIN/USER view separation in `app/rules/routes.py` and rule templates |
+
+## Data Requirement Status
+
+| RFP ID | Status | Implementation / evidence |
+|---|---|---|
+| DAR-001 | Implemented | SQLite transactions/FKs plus ordered migrations in `app/db/migrations.py` and applied history in `schema_versions` |
+| DAR-002 | Implemented | `User` model and timestamp mixin; schema/authentication tests |
+| DAR-003 | Implemented | `Project` model and project tests |
+| DAR-004 | Implemented | `ProjectUser` composite relationship and access tests |
+| DAR-005 | Implemented | `AnalysisRun` model, lifecycle service and execution tests |
+| DAR-006 | Implemented | normalized `Finding` model/service and Finding tests |
+| DAR-007 | Implemented | `Rule` model includes item number, reference info, active state and default severity; official catalog seed tests |
+| DAR-008 | Implemented | Finding snapshots rule name, KISA ID, language, severity and confidence at analysis time |
+| DAR-009 | Implemented | JSON `AnalysisRun.summary`, `Finding.evidence` and `Finding.raw_result` |
+| DAR-010 | Implemented | SQLite FK enforcement and CASCADE/RESTRICT relationship tests |
+
+## Security Requirement Status
+
+| RFP ID | Status | Implementation / evidence |
+|---|---|---|
+| SEC-001 | Implemented | Required bcrypt dependency and fail-closed password helpers in `app/auth/security.py`; hash and response-boundary tests in `tests/test_authentication.py` |
+| SEC-002 | Implemented | Signed, expiring cookie session and CSRF rotation in `app/auth/session.py`; missing, tampered and expired session tests in `tests/test_authentication.py` |
+| SEC-003 | Implemented | ADMIN checks for project mutation, membership, upload, analysis and error detail in auth/project routes; integration tests |
+| SEC-004 | Implemented | Assigned USER read-only routes and blocked POST/management routes in `tests/test_projects.py` and `tests/test_end_to_end.py` |
+| SEC-005 | Implemented | `_accessible_project_or_404` verifies `project_users` instead of trusting route IDs; project/analysis/Finding access tests |
+| SEC-006 | Implemented | Inaccessible project, analysis and Finding resources consistently return `404`; outsider end-to-end assertions |
+| SEC-007 | Implemented | Project-bound source path validation, owner-only directories, regular-file copy and per-run cleanup in upload/analysis services |
+| SEC-008 | Implemented | ZIP signature, traversal, absolute path, link, special file, duplicate path, encrypted archive and byte-limit checks in `app/projects/upload.py` |
+| SEC-009 | Implemented | Upload limits plus Semgrep jobs, memory, target, output and wall-time limits; process-group termination and ADMIN-only error detail tests |
+| SEC-010 | Implemented | Exact pins in `requirements.txt`, weekly Dependabot configuration, license inventory and update response policy in `docs/security.md` |
+
+## Test Requirement Status
+
+| RFP ID | Status | Implementation / evidence |
+|---|---|---|
+| TST-001 | Implemented | ADMIN·USER login, signed-cookie rotation, logout and unauthenticated blocking in `tests/test_authentication.py` |
+| TST-002 | Implemented | USER project create/edit, membership and analysis POST denial plus ADMIN success paths in project/end-to-end tests |
+| TST-003 | Implemented | Assigned-user project/result access and unassigned-user project, run and Finding `404` assertions in project/end-to-end tests |
+| TST-004 | Implemented | ZIP upload, language provenance, real Semgrep rule execution and normalized Finding persistence in end-to-end/diagnostic tests |
+| TST-005 | Implemented | Fixed vulnerable/safe Java, JavaScript and Python samples with expected rule, line, severity and confidence in `tests/samples/` |
+| TST-006 | Implemented | All 49 Rules have unique identifier, category, positive item number, name and implementation status in `tests/test_rule_catalog.py` |
+| TST-007 | Implemented | Analysis status/summary, Finding storage, severity/confidence filters, detail data and Rule FK checks in Finding/end-to-end tests |
+| TST-008 | Implemented | Invalid target, nonzero exit, timeout, safe error storage, correction/re-run and failed-history preservation in analysis tests |
+
 | Requirement group | Implementation | Automated verification |
 |---|---|---|
 | Application startup, environment loading, SQLite schema | `app/config.py`, `app/db/database.py`, `app/main.py` | `tests/test_bootstrap.py`, `tests/test_database_schema.py` |
 | Authentication, signed session, CSRF, password hashing | `app/auth/` | `tests/test_authentication.py` |
+| Company email identifier policy and legacy admin migration | `app/auth/identifiers.py`, `app/auth/services.py` | `tests/test_authentication.py` |
 | ADMIN user management and protected administrator state | `app/auth/services.py`, `app/auth/routes.py` | `tests/test_authentication.py` |
 | Project CRUD, membership, and project visibility | `app/projects/services.py`, `app/projects/routes.py` | `tests/test_projects.py`, `tests/test_end_to_end.py` |
 | ZIP-only upload and safe extraction | `app/projects/upload.py` | `tests/test_source_upload.py` |
 | ZIP Slip, symbolic link, path traversal, and size limits | `app/projects/upload.py` | `tests/test_source_upload.py` |
-| Semgrep process isolation, timeout, error status, and JSON collection | `app/analysis/service.py` | `tests/test_analysis_execution.py` |
+| ADMIN-only source mutation/analysis and USER read-only results | `app/analysis/routes.py`, project/analysis templates | `tests/test_end_to_end.py` |
+| Semgrep process isolation, timeout, error status, JSON collection, and per-run provenance | `app/analysis/service.py` | `tests/test_analysis_execution.py` |
+| Registered-language detection and language-scoped scanning | `app/analysis/languages.py`, `app/analysis/service.py` | `tests/test_analysis_execution.py`, `tests/test_rule_catalog.py` |
 | Git-ignored upload source scanning | `app/analysis/service.py` (`--no-git-ignore`) | `tests/test_analysis_execution.py`, `tests/test_end_to_end.py` |
 | Normalized Finding persistence, filters, details, and raw result preservation | `app/findings/services.py`, finding routes/templates | `tests/test_findings.py`, `tests/test_end_to_end.py` |
-| Finding/project access boundaries | `app/projects/routes.py` | `tests/test_projects.py`, `tests/test_end_to_end.py` |
+| Finding/project access boundaries | `app/projects/access.py`, `app/findings/routes.py` | `tests/test_projects.py`, `tests/test_end_to_end.py` |
 | KISA 2021 implementation-stage 49-item catalog | `app/rules/catalog.py`, `app/rules/services.py` | `tests/test_rule_catalog.py` |
-| Implemented local Semgrep rules and supported language status | `app/rules/semgrep/kisa-2021.yml`, `app/rules/catalog.py` | `tests/test_rule_catalog.py`, `tests/test_end_to_end.py` |
+| Implemented local Semgrep rules and supported language status | `app/rules/semgrep/kisa-2021/`, `app/rules/catalog.py` | `tests/test_rule_catalog.py`, `tests/test_end_to_end.py` |
+| SEC control contract and external component governance | `docs/security.md`, `.github/dependabot.yml`, `requirements.txt` | `tests/test_security_controls.py` |
+| TST fixed examples and expected diagnostic results | `docs/testing.md`, `tests/samples/expected_findings.json` | `tests/test_diagnostic_examples.py` |
+
+## Quality Requirement Status
+
+| RFP ID | Status | Implementation / evidence |
+|---|---|---|
+| QLT-001 | Implemented | Responsibility-owned routes/services in `app/auth/`, `app/projects/`, `app/analysis/`, `app/findings/`, and `app/rules/`; ownership assertions in `tests/test_quality_architecture.py` |
+| QLT-002 | Implemented | One KISA item per YAML under `app/rules/semgrep/kisa-2021/`; file independence and whole-ruleset provenance tests |
+| QLT-003 | Implemented | Central language registry plus shared AnalysisRun/Finding pipeline; all supported languages exercise the same flow in diagnostic tests |
+| QLT-004 | Implemented | `app/findings/services.py` normalizes every result to the common Finding model; cross-language field assertions in diagnostic tests |
+| QLT-005 | Implemented | FK constraints, run-derived Finding language and Rule-language compatibility checks; schema and quality consistency tests |
 
 ## Verification Scope and Current Coverage
 
 - The catalog contains all 49 implementation-stage items from the supplied
   KISA 2021 guide.
-- Four Python rules are intentionally `PARTIAL`: SQL injection, operating
-  system command injection, hardcoded sensitive information, and weak
-  cryptographic algorithms.
+- Four initial KISA items are intentionally `PARTIAL` for Python, Java, and
+  JavaScript: SQL injection, operating system command injection, hardcoded
+  sensitive information, and weak cryptographic algorithms.
 - The other 45 catalog items are `NOT_IMPLEMENTED`; the application does not
   claim automatic detection for them.
-- Java and JavaScript projects can be created and analyzed, but no local rule
-  is currently mapped for those languages.
+- Python, Java, and JavaScript use language-specific Semgrep rules mapped to
+  the same four KISA catalog entries through `kisa_standard_id` metadata.
 - The end-to-end test performs login, project creation, membership assignment,
   ZIP upload, real Semgrep analysis, Finding storage and detail viewing, then
   verifies both assigned-user access and unassigned-user 404 behavior.
