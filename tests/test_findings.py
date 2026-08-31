@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 from app.analysis import service as analysis_service
 from app.config import Settings
 from app.db.models.analysis_run import AnalysisRun
+from app.db.models.diagnostic_rule import DiagnosticRule
 from app.db.models.enums import Confidence, ImplementationStatus, Language, Severity
 from app.db.models.finding import Finding
 from app.db.models.rule import Rule
@@ -55,13 +56,21 @@ def _seed_project_and_rule(application) -> int:
             language=Language.PYTHON, created_by=admin_id,
         )
         with session.begin():
-            session.add(
-                Rule(
+            rule = Rule(
                     name="Test mapped rule", description="test-only catalog mapping",
                     standard_id="TEST-001", category="test", severity=Severity.HIGH,
                     supported_languages=[Language.PYTHON.value],
                     implementation_status=ImplementationStatus.PARTIAL,
                     semgrep_rule_id="test.python.dangerous-call",
+            )
+            session.add(rule)
+            session.flush()
+            session.add(
+                DiagnosticRule(
+                    catalog_rule_id=rule.id,
+                    language=Language.PYTHON,
+                    semgrep_rule_id="test.python.dangerous-call",
+                    is_active=True,
                 )
             )
         return project.id
@@ -152,6 +161,8 @@ def test_semgrep_result_is_normalized_persisted_and_filterable(tmp_path: Path, m
         assert finding.evidence == {"lines": "dangerous_call(user_input)"}
         assert finding.recommendation == "Validate input."
         assert finding.raw_result == raw_result
+        assert not Path(finding.raw_result["path"]).is_absolute()
+        assert ".." not in Path(finding.raw_result["path"]).parts
 
 
 def test_unknown_semgrep_rule_is_not_saved_without_a_catalog_mapping(tmp_path: Path, monkeypatch) -> None:
@@ -187,7 +198,7 @@ def test_unknown_semgrep_rule_is_not_saved_without_a_catalog_mapping(tmp_path: P
         assert run.summary["stored_finding_count"] == 0
 
 
-def test_inactive_catalog_rule_does_not_persist_new_findings(
+def test_inactive_diagnostic_mapping_does_not_persist_new_findings(
     tmp_path: Path, monkeypatch
 ) -> None:
     application = create_app(_settings(tmp_path))
@@ -223,7 +234,14 @@ def test_inactive_catalog_rule_does_not_persist_new_findings(
                     select(Rule).where(Rule.standard_id == "TEST-001")
                 )
                 assert rule is not None
-                rule.is_active = False
+                mapping = session.scalar(
+                    select(DiagnosticRule).where(
+                        DiagnosticRule.catalog_rule_id == rule.id,
+                        DiagnosticRule.language == Language.PYTHON,
+                    )
+                )
+                assert mapping is not None
+                mapping.is_active = False
                 session.commit()
 
             transport = ASGITransport(app=application)

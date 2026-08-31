@@ -9,6 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.db.models.analysis_run import AnalysisRun
+from app.db.models.diagnostic_rule import DiagnosticRule
 from app.db.models.enums import Confidence, Severity
 from app.db.models.finding import Finding
 from app.db.models.rule import Rule
@@ -103,6 +104,16 @@ def persist_normalized_findings(
         rule.semgrep_rule_id: rule for rule in rules if rule.semgrep_rule_id is not None
     }
     rules_by_standard_id = {rule.standard_id: rule for rule in rules}
+    active_mappings = {
+        (mapping.catalog_rule_id, mapping.semgrep_rule_id)
+        for mapping in session.scalars(
+            select(DiagnosticRule).where(
+                DiagnosticRule.catalog_rule_id.in_([rule.id for rule in rules]),
+                DiagnosticRule.language == language,
+                DiagnosticRule.is_active.is_(True),
+            )
+        ).all()
+    }
 
     findings: list[Finding] = []
     for item in results:
@@ -123,6 +134,13 @@ def persist_normalized_findings(
             # engine result must not produce a fabricated KISA association.
             continue
         if language.value not in rule.supported_languages:
+            continue
+        check_id_candidates = (
+            {check_id, check_id.rsplit(".", 1)[-1]}
+            if isinstance(check_id, str)
+            else set()
+        )
+        if not any((rule.id, candidate) in active_mappings for candidate in check_id_candidates):
             continue
 
         if not isinstance(extra, dict):
@@ -145,6 +163,9 @@ def persist_normalized_findings(
             recommendation = None
         evidence_lines = extra.get("lines")
         evidence = {"lines": evidence_lines} if isinstance(evidence_lines, str) else None
+        normalized_file_path = _normalized_path(item.get("path"), source_root)
+        normalized_raw_result = dict(item)
+        normalized_raw_result["path"] = normalized_file_path
 
         findings.append(
             Finding(
@@ -155,7 +176,7 @@ def persist_normalized_findings(
                 language=language,
                 severity=severity,
                 confidence=confidence,
-                file_path=_normalized_path(item.get("path"), source_root),
+                file_path=normalized_file_path,
                 start_line=_required_line(item.get("start"), "시작"),
                 start_column=_optional_column(item.get("start")),
                 end_line=_required_line(item.get("end"), "종료"),
@@ -163,7 +184,7 @@ def persist_normalized_findings(
                 message=message.strip(),
                 evidence=evidence,
                 recommendation=recommendation,
-                raw_result=item,
+                raw_result=normalized_raw_result,
             )
         )
     session.add_all(findings)

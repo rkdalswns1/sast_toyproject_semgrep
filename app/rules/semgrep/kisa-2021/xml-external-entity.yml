@@ -1,0 +1,28 @@
+rules:
+  - id: kisa-2021-xxe-python
+    languages: [python]
+    severity: ERROR
+    message: XML external entity resolution is explicitly enabled.
+    metadata:
+      kisa_standard_id: 제1절-8
+      confidence: HIGH
+      recommendation: Disable DTD processing and external entity resolution.
+    pattern: etree.XMLParser(..., resolve_entities=True, ...)
+  - id: kisa-2021-xxe-java
+    languages: [java]
+    severity: ERROR
+    message: XML is parsed without an external-entity restriction configuration.
+    metadata:
+      kisa_standard_id: 제1절-8
+      confidence: MEDIUM
+      recommendation: Disable external DTD, schema, and entity access before parsing.
+    pattern: DocumentBuilderFactory.newInstance().newDocumentBuilder().parse($INPUT)
+  - id: kisa-2021-xxe-javascript
+    languages: [javascript]
+    severity: ERROR
+    message: XML external entity expansion is enabled.
+    metadata:
+      kisa_standard_id: 제1절-8
+      confidence: HIGH
+      recommendation: Disable entity expansion and external resource loading.
+    pattern: 'libxmljs.parseXml($XML, {noent: true})'

@@ -20,14 +20,14 @@ Java, JavaScript, Python 소스 코드를 대상으로 정적 애플리케이션
 - ADMIN 전용 Semgrep 기반 분석 실행
 - 분석 상태 관리: PENDING, RUNNING, COMPLETED, FAILED
 - 분석 결과 정규화 및 저장
-- 분석별 소스 SHA-256, 소스 스냅샷, Semgrep 버전, 규칙 세트 SHA-256 기록
+- 분석별 소스 SHA-256, 소스 스냅샷, Semgrep 버전, 규칙 세트 SHA-256, 활성 규칙 목록·SHA-256 기록
 - 파일 경로와 코드 위치를 포함한 Finding 조회
 - severity, confidence, rule 정보 제공
 - Finding 상세 조회 및 severity 필터
 - KISA 소프트웨어 개발보안 49개 항목 카탈로그 관리
 - 항목별 구현 상태와 지원 언어 관리
-- Python, Java, JavaScript에서 동일한 초기 KISA 진단 항목 4개를 언어별 Semgrep 규칙으로 지원
-- SFR-012: ADMIN은 기존 KISA 카탈로그 항목에 언어별 Semgrep 진단 규칙을 등록·수정·비활성화할 수 있다. 공식 카탈로그 식별자와 명칭은 변경하지 않는다.
+- Python, Java, JavaScript에서 동일한 KISA 진단 항목 8개를 언어별 Semgrep 규칙으로 지원
+- SFR-012: 신규 Semgrep YAML은 개발자가 규칙 디렉터리에 배치하고, ADMIN은 `/rules/new`에서 기존 KISA 카탈로그 항목에 언어별 Semgrep Rule ID를 등록·수정한다. 웹 애플리케이션은 YAML 내용을 해석하거나 편집하지 않으며 공식 카탈로그 식별자와 명칭도 변경하지 않는다.
 - SFR-013: ADMIN과 USER는 KISA 49개 카탈로그를 검색·필터·상세 조회할 수 있고, ADMIN에게만 규칙 관리 기능을 표시한다.
 
 ## Data Requirements

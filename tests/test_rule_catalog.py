@@ -131,7 +131,8 @@ def test_mapped_local_semgrep_rules_persist_findings_for_supported_language(tmp_
             "SQL 삽입", "운영체제 명령어 삽입", "하드코드된 중요정보", "취약한 암호화 알고리즘 사용"
         }
         assert {finding.file_path for finding in findings} == {"vulnerable.py"}
-        assert all(finding.raw_result["path"].startswith(str(settings.upload_dir)) for finding in findings)
+        assert {finding.raw_result["path"] for finding in findings} == {"vulnerable.py"}
+        assert all(not Path(finding.raw_result["path"]).is_absolute() for finding in findings)
 
 
 @pytest.mark.parametrize(

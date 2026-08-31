@@ -8,6 +8,7 @@
 - 개발자의 `.env`, `sast.db`, `uploads/` 및 기존 분석 이력을 변경하지 않는다.
 - Semgrep 실행을 대체하는 단위 테스트와 실제 로컬 Semgrep을 실행하는 통합 테스트를 구분한다.
 - 실제 Semgrep 테스트는 네트워크 규칙 다운로드 없이 저장소의 `app/rules/semgrep/kisa-2021/` 아래 진단 항목별 규칙만 사용한다.
+- 기존 DB 업그레이드 시험은 마이그레이션 버전 4가 확장된 내장 규칙 메타데이터를 갱신하고, 관리자가 선택한 언어별 매핑과 카탈로그 활성 상태를 재시작 후에도 보존하는지 확인한다.
 
 ## Diagnostic Samples
 
@@ -25,14 +26,18 @@ tests/samples/
     └── safe.js
 ```
 
-`expected_findings.json`은 지원 언어별 취약 파일에서 기대하는 KISA 기준 ID, 시작 줄, 심각도와 신뢰도를 고정한다. 취약 예제는 현재 `PARTIAL`로 구현된 네 항목을 각각 한 번 포함한다.
+`expected_findings.json`은 지원 언어별 취약 파일에서 기대하는 KISA 기준 ID, 시작 줄, 심각도와 신뢰도를 고정한다. 취약 예제는 현재 `PARTIAL`로 구현된 여덟 항목을 각각 한 번 포함한다.
 
 - `제1절-1`: SQL 삽입
+- `제1절-3`: 경로 조작 및 자원 삽입
+- `제1절-4`: 크로스사이트 스크립트
 - `제1절-5`: 운영체제 명령어 삽입
+- `제1절-6`: 위험한 형식 파일 업로드
+- `제1절-8`: 부적절한 XML 외부개체 참조
 - `제2절-6`: 하드코드된 중요정보
 - `제2절-4`: 취약한 암호화 알고리즘 사용
 
-정상 예제는 매개변수화 쿼리, shell을 사용하지 않는 프로세스 실행, 외부 비밀정보 로딩 및 SHA-256을 사용하며 위 네 항목이 탐지되지 않아야 한다.
+정상 예제는 매개변수화 쿼리, 경로 정규화, HTML 이스케이프, 업로드 파일명 재생성, 외부 엔티티 비활성화, shell을 사용하지 않는 프로세스 실행, 외부 비밀정보 로딩 및 SHA-256을 사용하며 위 여덟 항목이 탐지되지 않아야 한다.
 
 ## Requirement Matrix
 
@@ -41,11 +46,17 @@ tests/samples/
 | TST-001 | ADMIN·USER 로그인, 쿠키 발급, 미인증 차단 | `tests/test_authentication.py` |
 | TST-002 | USER 쓰기·분석·권한 변경 차단, ADMIN 허용 | `tests/test_projects.py`, `tests/test_end_to_end.py` |
 | TST-003 | 할당 사용자 조회, 미할당 사용자 결과 404 | `tests/test_projects.py`, `tests/test_end_to_end.py` |
-| TST-004 | ZIP 수집부터 실제 Semgrep·정규화까지 | `tests/test_end_to_end.py`, `tests/test_diagnostic_examples.py` |
+| TST-004 | ZIP 수집부터 실제 Semgrep·정규화, 활성 규칙 스냅샷까지 | `tests/test_end_to_end.py`, `tests/test_diagnostic_examples.py`, `tests/test_analysis_execution.py` |
 | TST-005 | 취약·정상 예제, 기대 위치·메타데이터 | `tests/test_diagnostic_examples.py` |
 | TST-006 | 49개 전체 필수 필드와 구현 상태 | `tests/test_rule_catalog.py` |
-| TST-007 | 상태·저장·필터·상세·Rule FK | `tests/test_findings.py`, `tests/test_end_to_end.py` |
+| TST-007 | 상태·저장·필터·상세·Rule FK·상대경로 정규화 | `tests/test_findings.py`, `tests/test_rule_catalog.py`, `tests/test_end_to_end.py` |
 | TST-008 | 잘못된 대상·실행 오류·수정 후 재실행 | `tests/test_analysis_execution.py` |
+
+실행 오류 시험은 Semgrep의 제한된 표준 오류가 실패 실행에 저장되는지, 오류 로그 상한을 초과하면 프로세스 그룹이 종료되는지, 저장된 원문이 ADMIN에게만 표시되는지를 포함한다.
+
+SEC-007 시험은 프로젝트별 소스 경계, 분석별 작업공간 생성·삭제와 Semgrep에 애플리케이션 비밀 환경변수가 전달되지 않는지를 검증한다.
+
+SFR-012 등록 시험은 ADMIN의 KISA 항목·언어별 Semgrep Rule ID 등록과 수정, DB 지속성, USER 접근 차단 및 중복 Rule ID 거부를 검증한다. YAML의 문법과 탐지 동작은 실제 Semgrep 진단 예제 시험이 담당한다.
 
 ## Commands
 

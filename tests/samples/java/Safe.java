@@ -8,5 +8,10 @@ class Safe {
         new ProcessBuilder("echo", userInput).start();
         String password = System.getenv("APP_PASSWORD");
         MessageDigest.getInstance("SHA-256");
+        new FileInputStream(new File("/srv/data", new File(userInput).getName()));
+        upload.transferTo(new File("/srv/uploads", generatedName));
+        DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
+        factory.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true);
+        factory.newDocumentBuilder().parse(xmlInput);
     }
 }

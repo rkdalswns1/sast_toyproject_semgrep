@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import json
 from collections.abc import Callable
 from dataclasses import dataclass
 
-from sqlalchemy import Connection, Engine, inspect, select, text
+from sqlalchemy import Connection, Engine, inspect, select, text, update
 
+from app.db.models.finding import Finding
 from app.db.models.schema_version import SchemaVersion
 
 
@@ -65,6 +67,57 @@ def _add_diagnostic_rules(connection: Connection) -> None:
             ")"
         )
     )
+
+
+def _sync_expanded_builtin_rule_metadata(connection: Connection) -> None:
+    """Upgrade catalog rows for the second built-in diagnostic-rule batch.
+
+    Preserve administrator-controlled activation state. Only rows that still
+    have the old NOT_IMPLEMENTED/empty-language values are migrated.
+    """
+    implemented_rules = {
+        "제1절-3": "kisa-2021-path-traversal-python",
+        "제1절-4": "kisa-2021-xss-python",
+        "제1절-6": "kisa-2021-unrestricted-upload-python",
+        "제1절-8": "kisa-2021-xxe-python",
+    }
+    supported_languages = json.dumps(["JAVA", "JAVASCRIPT", "PYTHON"])
+    for standard_id, semgrep_rule_id in implemented_rules.items():
+        connection.execute(
+            text(
+                "UPDATE rules "
+                "SET supported_languages = :supported_languages, "
+                "implementation_status = 'PARTIAL', "
+                "semgrep_rule_id = :semgrep_rule_id "
+                "WHERE standard_id = :standard_id "
+                "AND implementation_status = 'NOT_IMPLEMENTED' "
+                "AND supported_languages = '[]'"
+            ),
+            {
+                "standard_id": standard_id,
+                "supported_languages": supported_languages,
+                "semgrep_rule_id": semgrep_rule_id,
+            },
+        )
+
+
+def _normalize_existing_finding_raw_paths(connection: Connection) -> None:
+    """Replace transient workspace paths in existing raw Finding JSON."""
+    findings = connection.execute(
+        select(Finding.id, Finding.file_path, Finding.raw_result)
+    ).all()
+    for finding_id, file_path, raw_result in findings:
+        if not isinstance(raw_result, dict) or raw_result.get("path") == file_path:
+            continue
+        normalized_raw_result = dict(raw_result)
+        normalized_raw_result["path"] = file_path
+        connection.execute(
+            update(Finding)
+            .where(Finding.id == finding_id)
+            .values(raw_result=normalized_raw_result)
+        )
+
+
 SCHEMA_MIGRATIONS: tuple[SchemaMigration, ...] = (
     SchemaMigration(1, "Initial SAST domain schema baseline", _record_initial_schema),
     SchemaMigration(
@@ -76,6 +129,16 @@ SCHEMA_MIGRATIONS: tuple[SchemaMigration, ...] = (
         3,
         "Add language-specific Semgrep diagnostic rule mappings",
         _add_diagnostic_rules,
+    ),
+    SchemaMigration(
+        4,
+        "Synchronize metadata for the expanded built-in diagnostic rules",
+        _sync_expanded_builtin_rule_metadata,
+    ),
+    SchemaMigration(
+        5,
+        "Normalize stored Semgrep result paths to source-relative paths",
+        _normalize_existing_finding_raw_paths,
     ),
 )
 

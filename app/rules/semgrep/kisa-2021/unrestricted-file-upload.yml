@@ -1,0 +1,28 @@
+rules:
+  - id: kisa-2021-unrestricted-upload-python
+    languages: [python]
+    severity: ERROR
+    message: An uploaded file is stored using its client-controlled filename.
+    metadata:
+      kisa_standard_id: 제1절-6
+      confidence: HIGH
+      recommendation: Allowlist file types, generate a server-side name, and store outside the web root.
+    pattern: $FILE.save($DIRECTORY + $FILE.filename)
+  - id: kisa-2021-unrestricted-upload-java
+    languages: [java]
+    severity: ERROR
+    message: An uploaded file is stored using its client-controlled filename.
+    metadata:
+      kisa_standard_id: 제1절-6
+      confidence: HIGH
+      recommendation: Allowlist extensions, generate a server-side name, and store outside the web root.
+    pattern: $FILE.transferTo(new File($DIRECTORY + $FILE.getOriginalFilename()))
+  - id: kisa-2021-unrestricted-upload-javascript
+    languages: [javascript]
+    severity: ERROR
+    message: An uploaded file is stored using its client-controlled filename.
+    metadata:
+      kisa_standard_id: 제1절-6
+      confidence: HIGH
+      recommendation: Allowlist file types, generate a server-side name, and store outside the web root.
+    pattern: $FILE.mv($DIRECTORY + $FILE.name)

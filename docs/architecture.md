@@ -31,7 +31,7 @@ uploads/
 
 `app/auth/`, `app/projects/`, `app/analysis/`, `app/findings/`, `app/rules/`는 각각 인증, 프로젝트, 분석 실행, 정규화 결과, 진단 항목의 서비스와 라우트를 소유한다. 프로젝트 접근 검사는 `app/projects/access.py`를 공유하되 분석과 Finding URL 라우트는 각 책임 모듈에 둔다.
 
-`app/rules/semgrep/kisa-2021/`는 KISA 진단 항목마다 독립 YAML 파일 하나를 두고, `scripts/`는 seed와 관리용 일회성 작업만 담당한다. 세부 품질·확장 계약은 `quality.md`를 따른다.
+`app/rules/semgrep/kisa-2021/`는 KISA 진단 항목마다 개발자가 관리하는 독립 YAML 파일 하나를 두고, `scripts/`는 seed와 관리용 일회성 작업만 담당한다. 웹 애플리케이션은 YAML을 해석하지 않고 ADMIN이 입력한 언어별 Semgrep Rule ID와 KISA 카탈로그의 연결만 DB에 저장한다. 세부 품질·확장 계약은 `quality.md`를 따른다.
 
 ## Analysis Flow
 
@@ -48,6 +48,8 @@ Semgrep 실행 제한 시간은 기본 60초이며 환경변수로 조정할 수
 
 저장된 소스 경로는 DB 값을 그대로 신뢰하지 않고 `uploads/projects/{project_id}/sources/` 하위인지 다시 검증한다. 분석마다 소유자 전용 임시 작업 디렉터리를 만들고 정규 파일만 복사하며, 성공·실패와 관계없이 실행 후 삭제한다.
 
+Semgrep 자식 프로세스는 애플리케이션 환경 전체를 상속하지 않으며 HOME, 임시 및 캐시 위치를 분석별 작업공간으로 제한한다.
+
 지원 언어의 표시명, 확장자 및 Semgrep 언어명은 중앙 language registry에서 관리한다. 프로젝트 폼과 분석 전 언어 식별은 같은 registry를 참조한다. 새 언어는 공통 분석 흐름이나 Finding 모델을 복제하지 않고 registry와 해당 Semgrep 규칙을 추가하여 확장한다. Finding 언어는 부모 AnalysisRun에서 파생하고 해당 언어를 지원하는 Rule만 연결한다.
 
 각 AnalysisRun의 `summary.provenance`에는 다음 재현성 정보를 기록한다.
@@ -56,6 +58,7 @@ Semgrep 실행 제한 시간은 기본 60초이며 환경변수로 조정할 수
 - 정렬된 소스 트리의 SHA-256
 - Semgrep 버전
 - 로컬 규칙 세트 SHA-256
+- 분석 시점에 활성화된 언어별 Rule ID·KISA ID·명칭·심각도 목록과 해당 목록의 SHA-256
 - 식별된 소스 언어
 
 ## Database Initialization

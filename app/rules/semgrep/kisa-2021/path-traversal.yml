@@ -1,0 +1,28 @@
+rules:
+  - id: kisa-2021-path-traversal-python
+    languages: [python]
+    severity: ERROR
+    message: External input is concatenated into a file-system path.
+    metadata:
+      kisa_standard_id: 제1절-3
+      confidence: HIGH
+      recommendation: Resolve paths below a fixed base directory after validating an allowlisted name.
+    pattern: open($BASE + $INPUT, ...)
+  - id: kisa-2021-path-traversal-java
+    languages: [java]
+    severity: ERROR
+    message: External input is concatenated into a file-system path.
+    metadata:
+      kisa_standard_id: 제1절-3
+      confidence: HIGH
+      recommendation: Canonicalize the path and enforce a fixed allowed base directory.
+    pattern: new FileInputStream($BASE + $INPUT)
+  - id: kisa-2021-path-traversal-javascript
+    languages: [javascript]
+    severity: ERROR
+    message: External input is concatenated into a file-system path.
+    metadata:
+      kisa_standard_id: 제1절-3
+      confidence: HIGH
+      recommendation: Resolve the path below a fixed base directory and reject traversal segments.
+    pattern: fs.readFile($BASE + $INPUT, ...)

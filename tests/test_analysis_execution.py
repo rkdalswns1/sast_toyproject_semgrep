@@ -18,6 +18,7 @@ from app.config import Settings
 from app.db.models.analysis_run import AnalysisRun
 from app.db.models.enums import AnalysisStatus, Language
 from app.db.models.project import Project
+from app.db.models.rule import Rule
 from app.db.models.user import User
 from app.main import create_app
 from app.projects.services import create_project, update_project_source
@@ -100,11 +101,20 @@ def test_successful_semgrep_run_collects_json_and_cleans_workspace(tmp_path: Pat
         assert isinstance(command, list)
         assert kwargs["timeout_seconds"] == 60
         assert kwargs["max_output_bytes"] == 20 * 1024 * 1024
+        assert kwargs["max_error_bytes"] == 64 * 1024
         assert "--no-git-ignore" in command
         assert command[command.index("--jobs") + 1] == "2"
         assert command[command.index("--max-memory") + 1] == "1024"
         assert command[command.index("--max-target-bytes") + 1] == "1000000"
         assert kwargs["env"]["SEMGREP_SETTINGS_FILE"].startswith(str(tmp_path / "uploads"))
+        assert set(kwargs["env"]) == {
+            "PATH", "HOME", "TMPDIR", "XDG_CACHE_HOME", "LANG", "LC_ALL",
+            "PYTHONNOUSERSITE", "PYTHONDONTWRITEBYTECODE",
+            "SEMGREP_SETTINGS_FILE", "SEMGREP_LOG_FILE",
+            "SEMGREP_SEND_METRICS", "SEMGREP_ENABLE_VERSION_CHECK",
+        }
+        assert "SESSION_SECRET" not in kwargs["env"]
+        assert "DATABASE_URL" not in kwargs["env"]
         return subprocess.CompletedProcess(command, 0, '{"results": [{"x": 1}], "errors": []}', "")
 
     run, settings = _run_scenario(tmp_path, monkeypatch, fake_run)
@@ -121,6 +131,29 @@ def test_successful_semgrep_run_collects_json_and_cleans_workspace(tmp_path: Pat
     assert provenance["detected_languages"] == ["PYTHON"]
     assert len(provenance["source_sha256"]) == 64
     assert len(provenance["ruleset_sha256"]) == 64
+    assert len(provenance["active_rules_sha256"]) == 64
+    assert len(provenance["active_rules"]) == 8
+    assert {
+        rule["kisa_standard_id"] for rule in provenance["active_rules"]
+    } == {
+        "제1절-1",
+        "제1절-3",
+        "제1절-4",
+        "제1절-5",
+        "제1절-6",
+        "제1절-8",
+        "제2절-4",
+        "제2절-6",
+    }
+    assert all(
+        set(rule) == {
+            "kisa_standard_id",
+            "rule_name",
+            "severity",
+            "semgrep_rule_id",
+        }
+        for rule in provenance["active_rules"]
+    )
     assert provenance["semgrep_version"] == "1.175.0"
     assert not list((settings.upload_dir / ".analysis-workspaces").iterdir())
 
@@ -136,6 +169,33 @@ def test_real_semgrep_process_completes_with_local_configuration(tmp_path: Path,
     }
 
 
+def test_active_rule_snapshot_hash_changes_when_a_rule_is_disabled(
+    tmp_path: Path,
+) -> None:
+    application = create_app(_settings(tmp_path))
+
+    async def exercise() -> tuple[list[dict[str, str]], str, list[dict[str, str]], str]:
+        async with application.router.lifespan_context(application):
+            with Session(application.state.db_engine) as session:
+                before = analysis_service._active_rule_snapshot(session, Language.PYTHON)
+                before_hash = analysis_service._active_rule_snapshot_sha256(before)
+                sql_injection = session.scalar(
+                    select(Rule).where(Rule.standard_id == "제1절-1")
+                )
+                assert sql_injection is not None
+                sql_injection.is_active = False
+                session.commit()
+                after = analysis_service._active_rule_snapshot(session, Language.PYTHON)
+                after_hash = analysis_service._active_rule_snapshot_sha256(after)
+                return before, before_hash, after, after_hash
+
+    before, before_hash, after, after_hash = asyncio.run(exercise())
+    assert len(before) == 8
+    assert len(after) == 7
+    assert before_hash != after_hash
+    assert "제1절-1" not in {rule["kisa_standard_id"] for rule in after}
+
+
 def test_nonzero_semgrep_run_is_recorded_as_failed(tmp_path: Path, monkeypatch) -> None:
     run, _ = _run_scenario(
         tmp_path, monkeypatch,
@@ -143,8 +203,7 @@ def test_nonzero_semgrep_run_is_recorded_as_failed(tmp_path: Path, monkeypatch) 
     )
     assert run.status is AnalysisStatus.FAILED
     assert run.finished_at is not None
-    assert run.error_message == "Semgrep 분석이 정상적으로 완료되지 않았습니다."
-    assert "private stderr" not in run.error_message
+    assert run.error_message == "Semgrep 종료 코드 2\nprivate stderr"
 
 
 def test_semgrep_timeout_is_recorded_as_failed(tmp_path: Path, monkeypatch) -> None:
@@ -236,6 +295,23 @@ def test_semgrep_process_output_and_wall_time_are_bounded(tmp_path: Path) -> Non
             env=dict(os.environ),
             timeout_seconds=5,
             max_output_bytes=1_000,
+            max_error_bytes=1_000,
+        )
+
+    error_workspace = tmp_path / "large-error"
+    error_workspace.mkdir()
+    with pytest.raises(AnalysisExecutionError, match="오류 로그가 크기 제한"):
+        analysis_service._run_semgrep_process(
+            [
+                sys.executable,
+                "-c",
+                "import sys,time; sys.stderr.write('x' * 200000); sys.stderr.flush(); time.sleep(5)",
+            ],
+            cwd=error_workspace,
+            env=dict(os.environ),
+            timeout_seconds=5,
+            max_output_bytes=1_000,
+            max_error_bytes=1_000,
         )
 
     timeout_workspace = tmp_path / "timeout"
@@ -247,7 +323,23 @@ def test_semgrep_process_output_and_wall_time_are_bounded(tmp_path: Path) -> Non
             env=dict(os.environ),
             timeout_seconds=1,
             max_output_bytes=1_000,
+            max_error_bytes=1_000,
         )
+
+
+def test_semgrep_process_captures_bounded_error_output(tmp_path: Path) -> None:
+    workspace = tmp_path / "captured-error"
+    workspace.mkdir()
+    completed = analysis_service._run_semgrep_process(
+        [sys.executable, "-c", "import sys; sys.stderr.write('parser detail'); sys.exit(2)"],
+        cwd=workspace,
+        env=dict(os.environ),
+        timeout_seconds=5,
+        max_output_bytes=1_000,
+        max_error_bytes=1_000,
+    )
+    assert completed.returncode == 2
+    assert completed.stderr == "parser detail"
 
 
 def test_analysis_rejects_another_projects_source_workspace(tmp_path: Path) -> None:

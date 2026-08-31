@@ -16,6 +16,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.config import Settings
@@ -25,8 +26,10 @@ from app.analysis.languages import (
     require_selected_language,
 )
 from app.db.models.analysis_run import AnalysisRun
+from app.db.models.diagnostic_rule import DiagnosticRule
 from app.db.models.enums import AnalysisStatus
 from app.db.models.project import Project
+from app.db.models.rule import Rule
 from app.findings.services import FindingNormalizationError, persist_normalized_findings
 
 
@@ -85,6 +88,57 @@ def _semgrep_command() -> str:
     return command
 
 
+def _semgrep_environment(workspace: Path) -> dict[str, str]:
+    """Build an allowlisted environment without application secrets."""
+    for directory in ("home", "tmp", "cache"):
+        target = workspace / directory
+        target.mkdir(mode=0o700, exist_ok=True)
+
+    return {
+        "PATH": f"{Path(sys.executable).parent}:/usr/bin:/bin",
+        "HOME": str(workspace / "home"),
+        "TMPDIR": str(workspace / "tmp"),
+        "XDG_CACHE_HOME": str(workspace / "cache"),
+        "LANG": "C.UTF-8",
+        "LC_ALL": "C.UTF-8",
+        "PYTHONNOUSERSITE": "1",
+        "PYTHONDONTWRITEBYTECODE": "1",
+        "SEMGREP_SETTINGS_FILE": str(
+            workspace / "semgrep-settings.yml"
+        ),
+        "SEMGREP_LOG_FILE": str(workspace / "semgrep.log"),
+        "SEMGREP_SEND_METRICS": "off",
+        "SEMGREP_ENABLE_VERSION_CHECK": "0",
+    }
+
+
+def _semgrep_scan_arguments(
+    *, config_path: Path, source_path: Path, settings: Settings, project_language
+) -> list[str]:
+    profile = language_profile(project_language)
+    arguments = [
+        "scan",
+        "--config",
+        str(config_path),
+        "--json",
+        "--quiet",
+        "--metrics",
+        "off",
+        "--disable-version-check",
+        "--no-git-ignore",
+        "--jobs",
+        str(settings.semgrep_jobs),
+        "--max-memory",
+        str(settings.semgrep_max_memory_mb),
+        "--max-target-bytes",
+        str(settings.semgrep_max_target_bytes),
+    ]
+    for extension in profile.extensions:
+        arguments.extend(["--include", f"*{extension}"])
+    arguments.append(str(source_path))
+    return arguments
+
+
 def _ruleset_path() -> Path:
     return Path(__file__).resolve().parents[1] / "rules" / "semgrep" / "kisa-2021"
 
@@ -125,8 +179,46 @@ def _sha256_source_tree(source_root: Path) -> str:
     return digest.hexdigest()
 
 
+def _active_rule_snapshot(session: Session, project_language) -> list[dict[str, str]]:
+    """Return the effective catalog-to-Semgrep mappings for this run."""
+    rows = session.execute(
+        select(
+            Rule.standard_id,
+            Rule.name,
+            Rule.severity,
+            DiagnosticRule.semgrep_rule_id,
+        )
+        .join(DiagnosticRule, DiagnosticRule.catalog_rule_id == Rule.id)
+        .where(
+            Rule.is_active.is_(True),
+            DiagnosticRule.is_active.is_(True),
+            DiagnosticRule.language == project_language,
+        )
+        .order_by(Rule.standard_id, DiagnosticRule.semgrep_rule_id)
+    ).all()
+    return [
+        {
+            "kisa_standard_id": standard_id,
+            "rule_name": rule_name,
+            "severity": severity.value,
+            "semgrep_rule_id": semgrep_rule_id,
+        }
+        for standard_id, rule_name, severity, semgrep_rule_id in rows
+    ]
+
+
+def _active_rule_snapshot_sha256(active_rules: list[dict[str, str]]) -> str:
+    serialized = json.dumps(
+        active_rules, ensure_ascii=False, separators=(",", ":"), sort_keys=True
+    ).encode("utf-8")
+    return hashlib.sha256(serialized).hexdigest()
+
+
 def _analysis_provenance(
-    source_path: Path, project_language, settings: Settings
+    source_path: Path,
+    project_language,
+    settings: Settings,
+    active_rules: list[dict[str, str]],
 ) -> dict[str, Any]:
     try:
         detected_languages = require_selected_language(source_path, project_language)
@@ -147,6 +239,8 @@ def _analysis_provenance(
         "source_sha256": _sha256_source_tree(source_path),
         "semgrep_version": semgrep_version,
         "ruleset_sha256": _sha256_ruleset(_ruleset_path()),
+        "active_rules": active_rules,
+        "active_rules_sha256": _active_rule_snapshot_sha256(active_rules),
         "selected_language": project_language.value,
         "detected_languages": sorted(language.value for language in detected_languages),
     }
@@ -176,18 +270,20 @@ def _run_semgrep_process(
     env: dict[str, str],
     timeout_seconds: int,
     max_output_bytes: int,
+    max_error_bytes: int = 64 * 1024,
 ) -> subprocess.CompletedProcess[str]:
-    """Run one process group while bounding wall time and captured JSON size."""
+    """Run one process group while bounding wall time, JSON, and error output."""
     output_path = cwd / "semgrep-result.json"
+    error_path = cwd / "semgrep-error.log"
     process: subprocess.Popen[bytes] | None = None
     try:
-        with output_path.open("xb") as output:
+        with output_path.open("xb") as output, error_path.open("xb") as error_output:
             process = subprocess.Popen(
                 command,
                 cwd=cwd,
                 env=env,
                 stdout=output,
-                stderr=subprocess.DEVNULL,
+                stderr=error_output,
                 start_new_session=os.name == "posix",
             )
             deadline = time.monotonic() + timeout_seconds
@@ -196,6 +292,11 @@ def _run_semgrep_process(
                     _terminate_process_group(process)
                     raise AnalysisExecutionError(
                         "Semgrep 분석 결과가 크기 제한을 초과했습니다."
+                    )
+                if error_path.stat().st_size > max_error_bytes:
+                    _terminate_process_group(process)
+                    raise AnalysisExecutionError(
+                        "Semgrep 오류 로그가 크기 제한을 초과했습니다."
                     )
                 remaining = deadline - time.monotonic()
                 if remaining <= 0:
@@ -213,57 +314,49 @@ def _run_semgrep_process(
 
     if output_path.stat().st_size > max_output_bytes:
         raise AnalysisExecutionError("Semgrep 분석 결과가 크기 제한을 초과했습니다.")
+    if error_path.stat().st_size > max_error_bytes:
+        raise AnalysisExecutionError("Semgrep 오류 로그가 크기 제한을 초과했습니다.")
     try:
         stdout = output_path.read_text(encoding="utf-8")
-    except (OSError, UnicodeDecodeError) as exc:
+        stderr = error_path.read_text(encoding="utf-8", errors="replace")
+    except OSError as exc:
         raise AnalysisExecutionError("Semgrep 결과를 처리하지 못했습니다.") from exc
     assert process is not None and process.returncode is not None
-    return subprocess.CompletedProcess(command, process.returncode, stdout, "")
+    return subprocess.CompletedProcess(command, process.returncode, stdout, stderr)
 
 
 def _execute_semgrep(
     source_path: Path, workspace: Path, settings: Settings, project_language
 ) -> dict[str, Any]:
     """Run Semgrep without a shell and return its JSON object."""
-    config_path = _ruleset_path()
-    profile = language_profile(project_language)
-    environment = os.environ.copy()
-    environment["SEMGREP_SETTINGS_FILE"] = str(workspace / "semgrep-settings.yml")
-    environment["SEMGREP_LOG_FILE"] = str(workspace / "semgrep.log")
-    environment["SEMGREP_SEND_METRICS"] = "off"
-    environment["SEMGREP_ENABLE_VERSION_CHECK"] = "0"
-
-    command = [
-        _semgrep_command(),
-        "scan",
-        "--config",
-        str(config_path),
-        "--json",
-        "--quiet",
-        "--metrics",
-        "off",
-        "--disable-version-check",
-        "--no-git-ignore",
-        "--jobs",
-        str(settings.semgrep_jobs),
-        "--max-memory",
-        str(settings.semgrep_max_memory_mb),
-        "--max-target-bytes",
-        str(settings.semgrep_max_target_bytes),
-    ]
-    for extension in profile.extensions:
-        command.extend(["--include", f"*{extension}"])
-    command.append(str(source_path))
+    command = [_semgrep_command()]
+    command.extend(
+        _semgrep_scan_arguments(
+            config_path=_ruleset_path(),
+            source_path=source_path,
+            settings=settings,
+            project_language=project_language,
+        )
+    )
+    environment = _semgrep_environment(workspace)
     completed = _run_semgrep_process(
         command,
         cwd=workspace,
         env=environment,
         timeout_seconds=settings.semgrep_timeout_seconds,
         max_output_bytes=settings.max_semgrep_output_bytes,
+        max_error_bytes=settings.max_semgrep_error_bytes,
     )
 
     if completed.returncode != 0:
-        raise AnalysisExecutionError("Semgrep 분석이 정상적으로 완료되지 않았습니다.")
+        error_detail = completed.stderr.strip()
+        if error_detail:
+            raise AnalysisExecutionError(
+                f"Semgrep 종료 코드 {completed.returncode}\n{error_detail}"
+            )
+        raise AnalysisExecutionError(
+            f"Semgrep 종료 코드 {completed.returncode}: 오류 출력이 없습니다."
+        )
     try:
         result = json.loads(completed.stdout)
     except json.JSONDecodeError as exc:
@@ -294,6 +387,7 @@ def execute_project_analysis(
     # each explicit write transaction that records the lifecycle.
     stored_project_id = project.id
     project_language = project.language
+    active_rules = _active_rule_snapshot(session, project_language)
     session.rollback()
 
     with session.begin():
@@ -318,7 +412,9 @@ def execute_project_analysis(
     error_message: str | None = None
     provenance: dict[str, Any] | None = None
     try:
-        provenance = _analysis_provenance(source_path, project_language, settings)
+        provenance = _analysis_provenance(
+            source_path, project_language, settings, active_rules
+        )
         workspace_root = settings.upload_dir / ".analysis-workspaces"
         workspace_root.mkdir(parents=True, exist_ok=True)
         workspace = Path(tempfile.mkdtemp(prefix=f"analysis-{run_id}-", dir=workspace_root))

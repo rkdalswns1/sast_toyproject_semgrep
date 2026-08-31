@@ -33,6 +33,7 @@ Phase 1에서 프로젝트 루트에 `.env.example`을 생성한다. 실제 `.en
 | `SEMGREP_MAX_MEMORY_MB` | 아니요 | `1024` | Semgrep 규칙별 최대 메모리 MiB |
 | `SEMGREP_MAX_TARGET_BYTES` | 아니요 | `1000000` | Semgrep이 스캔할 개별 대상 파일 최대 크기 |
 | `MAX_SEMGREP_OUTPUT_BYTES` | 아니요 | `20971520` | Semgrep JSON 출력 최대 20 MiB |
+| `MAX_SEMGREP_ERROR_BYTES` | 아니요 | `65536` | ADMIN 확인용 Semgrep 오류 로그 최대 64 KiB |
 
 `SESSION_SECRET`은 코드에 기본값을 두지 않고 UTF-8 기준 최소 32바이트를 요구한다. `.env.example`의 예시 문자열은 실제 비밀키로 사용할 수 없다. 테스트에서는 별도 테스트 값을 주입한다. 새 비밀키는 다음과 같이 생성할 수 있다.
 
@@ -115,9 +116,11 @@ is_active: true
 - 제한 위반 시 ZIP의 일부 파일도 분석에 사용하지 않는다.
 - 분석 실행마다 별도 임시 디렉터리를 사용한다.
 - 분석 종료 후 임시 디렉터리를 삭제한다.
+- Semgrep에는 PATH, 작업공간용 HOME·임시·캐시 위치, locale 및 Semgrep 로컬 설정만 전달하며 세션 비밀값, DB 주소와 프록시 환경변수는 전달하지 않는다.
 - 업로드 루트와 분석 작업 디렉터리는 POSIX 환경에서 소유자만 접근하도록 `0700` 권한을 사용한다.
 - 저장된 소스 경로는 해당 프로젝트의 `projects/{project_id}/sources/` 경계 안에 있어야 한다.
 - Semgrep은 기본 2개 작업, 규칙별 1,024 MiB 메모리, 대상 파일 1,000,000바이트, JSON 출력 20 MiB로 제한한다.
+- Semgrep 오류 출력은 최대 64 KiB까지만 보존하며 일반 USER에게 노출하지 않는다.
 - Semgrep 전체 실행 제한 시간은 60초이며 timeout 또는 출력 초과 시 전체 프로세스 그룹을 종료한다.
 - 모든 제한은 양의 정수 환경변수로 조정할 수 있다.
 

@@ -131,6 +131,9 @@ def test_authenticated_upload_analysis_findings_and_access_boundaries(tmp_path: 
                 )
                 assert run_response.status_code == 303
                 analysis_id = int(run_response.headers["location"].rsplit("/", 1)[1])
+                analysis_detail = await admin_client.get(f"/analysis/{analysis_id}")
+                assert "활성 규칙: 8개" in analysis_detail.text
+                assert "활성 규칙 구성 SHA-256" in analysis_detail.text
 
                 findings_page = await admin_client.get(
                     f"/analysis/{analysis_id}/findings?severity=HIGH"
@@ -222,4 +225,6 @@ def test_authenticated_upload_analysis_findings_and_access_boundaries(tmp_path: 
             "stored_finding_count": 4,
         }
         assert analysis_run.summary["provenance"]["selected_language"] == "PYTHON"
+        assert len(analysis_run.summary["provenance"]["active_rules"]) == 8
+        assert len(analysis_run.summary["provenance"]["active_rules_sha256"]) == 64
         assert len(findings) == 4

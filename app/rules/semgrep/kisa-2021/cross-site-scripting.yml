@@ -1,0 +1,28 @@
+rules:
+  - id: kisa-2021-xss-python
+    languages: [python]
+    severity: ERROR
+    message: Unescaped input is marked safe for HTML output.
+    metadata:
+      kisa_standard_id: 제1절-4
+      confidence: HIGH
+      recommendation: Escape untrusted data before inserting it into HTML.
+    pattern: flask.Markup($INPUT)
+  - id: kisa-2021-xss-java
+    languages: [java]
+    severity: ERROR
+    message: Unescaped input is written directly to an HTTP response.
+    metadata:
+      kisa_standard_id: 제1절-4
+      confidence: HIGH
+      recommendation: Encode untrusted data for the HTML output context.
+    pattern: $RESPONSE.getWriter().print($INPUT)
+  - id: kisa-2021-xss-javascript
+    languages: [javascript]
+    severity: ERROR
+    message: Unescaped input is sent directly as an HTTP response.
+    metadata:
+      kisa_standard_id: 제1절-4
+      confidence: HIGH
+      recommendation: Escape untrusted data for the HTML output context.
+    pattern: $RESPONSE.send($INPUT)

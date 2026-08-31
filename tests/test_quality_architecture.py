@@ -14,7 +14,10 @@ from app.projects.routes import router as projects_router
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 RULESET_ROOT = PROJECT_ROOT / "app" / "rules" / "semgrep" / "kisa-2021"
-EXPECTED_STANDARD_IDS = {"제1절-1", "제1절-5", "제2절-4", "제2절-6"}
+EXPECTED_STANDARD_IDS = {
+    "제1절-1", "제1절-3", "제1절-4", "제1절-5",
+    "제1절-6", "제1절-8", "제2절-4", "제2절-6",
+}
 
 
 def _route_modules(router, path: str) -> set[str]:
@@ -44,10 +47,14 @@ def test_analysis_and_finding_routes_have_responsibility_owned_modules() -> None
 def test_each_implemented_kisa_item_has_an_independent_rule_file() -> None:
     rule_files = sorted(RULESET_ROOT.glob("*.yml"))
     assert {rule_file.stem for rule_file in rule_files} == {
+        "cross-site-scripting",
         "hardcoded-sensitive-information",
         "os-command-injection",
+        "path-traversal",
         "sql-injection",
+        "unrestricted-file-upload",
         "weak-crypto",
+        "xml-external-entity",
     }
     assert not (RULESET_ROOT.parent / "kisa-2021.yml").exists()
 
@@ -65,7 +72,7 @@ def test_each_implemented_kisa_item_has_an_independent_rule_file() -> None:
         all_rule_ids.update(rule_ids)
         all_standard_ids.update(standard_ids)
 
-    assert len(all_rule_ids) == 12
+    assert len(all_rule_ids) == 24
     assert all_standard_ids == EXPECTED_STANDARD_IDS
 
 

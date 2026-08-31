@@ -90,12 +90,12 @@ def test_create_all_builds_domain_tables_schema_history_and_foreign_keys(
         versions = session.scalars(
             select(SchemaVersion).order_by(SchemaVersion.version)
         ).all()
-        assert [version.version for version in versions] == [1, 2, 3]
+        assert [version.version for version in versions] == [1, 2, 3, 4, 5]
         assert all(version.description and version.applied_at for version in versions)
 
     initialize_database(engine)
     with Session(engine) as session:
-        assert session.scalar(select(func.count()).select_from(SchemaVersion)) == 3
+        assert session.scalar(select(func.count()).select_from(SchemaVersion)) == 5
 
     engine.dispose()
 
@@ -149,7 +149,46 @@ def test_existing_database_is_upgraded_and_migration_is_recorded(
         assert legacy_rule.is_active is True
         assert session.scalars(
             select(SchemaVersion.version).order_by(SchemaVersion.version)
-        ).all() == [1, 2, 3]
+        ).all() == [1, 2, 3, 4, 5]
+
+    engine.dispose()
+
+
+def test_existing_catalog_rows_are_upgraded_for_expanded_builtin_rules(
+    tmp_path: Path,
+) -> None:
+    engine = create_db_engine(f"sqlite:///{tmp_path / 'catalog-upgrade.db'}")
+    initialize_database(engine)
+
+    with Session(engine) as session:
+        session.delete(session.get(SchemaVersion, 4))
+        session.add(
+            Rule(
+                name="경로 조작 및 자원 삽입",
+                description="legacy catalog row",
+                standard_id="제1절-3",
+                category="입력데이터 검증 및 표현",
+                item_number=3,
+                reference_info=None,
+                is_active=False,
+                severity=Severity.INFO,
+                supported_languages=[],
+                implementation_status=ImplementationStatus.NOT_IMPLEMENTED,
+                semgrep_rule_id=None,
+            )
+        )
+        session.commit()
+
+    initialize_database(engine)
+
+    with Session(engine) as session:
+        rule = session.scalar(select(Rule).where(Rule.standard_id == "제1절-3"))
+        assert rule is not None
+        assert rule.implementation_status is ImplementationStatus.PARTIAL
+        assert rule.supported_languages == ["JAVA", "JAVASCRIPT", "PYTHON"]
+        assert rule.semgrep_rule_id == "kisa-2021-path-traversal-python"
+        assert rule.is_active is False
+        assert session.get(SchemaVersion, 4) is not None
 
     engine.dispose()
 
@@ -256,6 +295,82 @@ def test_models_persist_and_project_deletion_cascades(tmp_path: Path) -> None:
         assert session.scalar(select(func.count()).select_from(Finding)) == 0
         assert session.scalar(select(func.count()).select_from(Rule)) == 1
         assert session.scalar(select(func.count()).select_from(User)) == 1
+
+    engine.dispose()
+
+
+def test_existing_finding_raw_path_is_normalized_by_migration(tmp_path: Path) -> None:
+    engine = create_db_engine(f"sqlite:///{tmp_path / 'finding-path-upgrade.db'}")
+    initialize_database(engine)
+
+    with Session(engine) as session:
+        user = User(
+            username="owner@company.com",
+            password_hash="hashed-password",
+            role=UserRole.ADMIN,
+        )
+        session.add(user)
+        session.flush()
+        project = Project(
+            name="sample",
+            source_type=SourceType.ZIP,
+            language=Language.PYTHON,
+            source_path="uploads/sample",
+            created_by=user.id,
+        )
+        session.add(project)
+        session.flush()
+        rule = Rule(
+            name="Sample rule",
+            description="Test-only rule",
+            standard_id="TEST-PATH-001",
+            category="TEST",
+            severity=Severity.HIGH,
+            supported_languages=[Language.PYTHON.value],
+            implementation_status=ImplementationStatus.PARTIAL,
+        )
+        session.add(rule)
+        session.flush()
+        run = AnalysisRun(
+            project_id=project.id,
+            engine="Semgrep",
+            language=Language.PYTHON,
+            status=AnalysisStatus.COMPLETED,
+            executed_by=user.id,
+        )
+        session.add(run)
+        session.flush()
+        finding = Finding(
+            analysis_run_id=run.id,
+            rule_id=rule.id,
+            rule_name=rule.name,
+            kisa_id=rule.standard_id,
+            language=Language.PYTHON,
+            severity=Severity.HIGH,
+            confidence=Confidence.HIGH,
+            file_path="src/vulnerable.py",
+            start_line=1,
+            message="Sample finding",
+            raw_result={
+                "check_id": "test.path",
+                "path": "/tmp/analysis-1/source/src/vulnerable.py",
+                "extra": {"message": "preserved"},
+            },
+        )
+        session.add(finding)
+        session.delete(session.get(SchemaVersion, 5))
+        session.commit()
+        finding_id = finding.id
+
+    initialize_database(engine)
+
+    with Session(engine) as session:
+        migrated = session.get(Finding, finding_id)
+        assert migrated is not None
+        assert migrated.raw_result["path"] == "src/vulnerable.py"
+        assert migrated.raw_result["check_id"] == "test.path"
+        assert migrated.raw_result["extra"] == {"message": "preserved"}
+        assert session.get(SchemaVersion, 5) is not None
 
     engine.dispose()
 
