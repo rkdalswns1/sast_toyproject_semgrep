@@ -44,4 +44,8 @@ temp/
 work/
 !design/export.pdf
 
-
+# Local migration and test artifacts
+.tmp/
+db.zip
+path1/
+path1.zip
