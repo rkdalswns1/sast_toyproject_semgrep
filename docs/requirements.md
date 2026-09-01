@@ -27,7 +27,7 @@ Java, JavaScript, Python 소스 코드를 대상으로 정적 애플리케이션
 - Finding 상세 조회 및 severity 필터
 - KISA 소프트웨어 개발보안 49개 항목 카탈로그 관리
 - 항목별 구현 상태와 지원 언어 관리
-- Python, Java, JavaScript에서 동일한 KISA 진단 항목 8개를 언어별 Semgrep 규칙으로 지원
+- Python, Java, JavaScript에서 공통 KISA 진단 항목 9개를 언어별 Semgrep 규칙으로 지원하고, 신뢰할 수 없는 데이터의 역직렬화는 Java와 Python에서 추가 지원
 - SFR-012: 신규 Semgrep YAML은 개발자가 규칙 디렉터리에 배치하고, SUPER_ADMIN은 `/rules/new`에서 기존 KISA 카탈로그 항목에 언어별 Semgrep Rule ID를 등록·수정한다. 웹 애플리케이션은 YAML 내용을 해석하거나 편집하지 않으며 공식 카탈로그 식별자와 명칭도 변경하지 않는다.
 - SFR-013: 인증된 모든 역할은 KISA 49개 카탈로그를 검색·필터·상세 조회할 수 있고, SUPER_ADMIN에게만 규칙 관리 기능을 표시한다.
 

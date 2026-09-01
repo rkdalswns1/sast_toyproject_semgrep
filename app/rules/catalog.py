@@ -42,6 +42,10 @@ _INITIAL_RULE_LANGUAGES = (
     Language.JAVASCRIPT,
     Language.PYTHON,
 )
+_JAVA_PYTHON_RULE_LANGUAGES = (
+    Language.JAVA,
+    Language.PYTHON,
+)
 
 
 def _entry(
@@ -96,7 +100,7 @@ KISA_2021_CATALOG: tuple[CatalogEntry, ...] = (
     _entry(2, 8, _SECURITY_FUNCTION, "적절하지 않은 난수 값 사용"),
     _entry(2, 9, _SECURITY_FUNCTION, "취약한 비밀번호 허용"),
     _entry(2, 10, _SECURITY_FUNCTION, "부적절한 전자서명 확인"),
-    _entry(2, 11, _SECURITY_FUNCTION, "부적절한 인증서 유효성 검증"),
+    _entry(2, 11, _SECURITY_FUNCTION, "부적절한 인증서 유효성 검증", Severity.HIGH, _INITIAL_RULE_LANGUAGES, ImplementationStatus.PARTIAL, "kisa-2021-improper-certificate-validation-python"),
     _entry(2, 12, _SECURITY_FUNCTION, "사용자 하드디스크에 저장되는 쿠키를 통한 정보 노출"),
     _entry(2, 13, _SECURITY_FUNCTION, "주석문 안에 포함된 시스템 주요정보"),
     _entry(2, 14, _SECURITY_FUNCTION, "솔트 없이 일방향 해쉬 함수 사용"),
@@ -111,7 +115,7 @@ KISA_2021_CATALOG: tuple[CatalogEntry, ...] = (
     _entry(5, 2, _CODE_ERROR, "부적절한 자원 해제"),
     _entry(5, 3, _CODE_ERROR, "해제된 자원 사용"),
     _entry(5, 4, _CODE_ERROR, "초기화되지 않은 변수 사용"),
-    _entry(5, 5, _CODE_ERROR, "신뢰할 수 없는 데이터의 역직렬화"),
+    _entry(5, 5, _CODE_ERROR, "신뢰할 수 없는 데이터의 역직렬화", Severity.HIGH, _JAVA_PYTHON_RULE_LANGUAGES, ImplementationStatus.PARTIAL, "kisa-2021-unsafe-deserialization-python"),
     _entry(6, 1, _ENCAPSULATION, "잘못된 세션에 의한 데이터 정보 노출"),
     _entry(6, 2, _ENCAPSULATION, "제거되지 않고 남은 디버그 코드"),
     _entry(6, 3, _ENCAPSULATION, "Public 메소드부터 반환된 Private 배열"),

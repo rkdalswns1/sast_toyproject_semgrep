@@ -38,3 +38,9 @@ KISA 카탈로그에 존재한다고 해서 자동 탐지가 구현된 것으로
 - `reference_info`에는 `소프트웨어 보안약점 진단가이드(2021)`와 공식 절·항목을 기록한다.
 - 카탈로그 seed 항목은 기본적으로 활성 상태로 등록하되, 비활성화해도 기존 Finding과 이력은 유지한다.
 - 언어별 Semgrep Rule ID 연결과 카탈로그 활성 상태 관리는 SUPER_ADMIN만 수행한다.
+
+## Current Automatic Detection Scope
+
+- Java, JavaScript, Python 공통: SQL 삽입, 경로 조작 및 자원 삽입, 크로스사이트 스크립트, 운영체제 명령어 삽입, 위험한 형식 파일 업로드, 부적절한 XML 외부개체 참조, 취약한 암호화 알고리즘 사용, 하드코드된 중요정보, 부적절한 인증서 유효성 검증
+- Java, Python: 신뢰할 수 없는 데이터의 역직렬화
+- 위 열 항목은 대표 패턴만 자동 탐지하므로 `PARTIAL`이며, 나머지 39개 항목은 `NOT_IMPLEMENTED`를 유지한다.

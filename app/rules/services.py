@@ -17,7 +17,7 @@ class DiagnosticRuleManagementError(ValueError):
 
 
 def _built_in_rule_ids() -> dict[str, dict[Language, str]]:
-    """Return fixed mappings for the eight built-in, repository-owned rules."""
+    """Return fixed mappings for the repository-owned diagnostic rules."""
     mappings: dict[str, dict[Language, str]] = {}
     for entry in KISA_2021_CATALOG:
         if entry.semgrep_rule_id is None:

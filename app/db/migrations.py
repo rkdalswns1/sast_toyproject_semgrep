@@ -162,6 +162,38 @@ def _upgrade_user_roles_and_password_policy(connection: Connection) -> None:
         raise RuntimeError("User role migration would violate foreign keys")
 
 
+def _sync_phase11_builtin_rule_metadata(connection: Connection) -> None:
+    """Enable the approved Phase 11 catalog rows on existing databases."""
+    implemented_rules = {
+        "제2절-11": (
+            ["JAVA", "JAVASCRIPT", "PYTHON"],
+            "kisa-2021-improper-certificate-validation-python",
+        ),
+        "제5절-5": (
+            ["JAVA", "PYTHON"],
+            "kisa-2021-unsafe-deserialization-python",
+        ),
+    }
+    for standard_id, (languages, semgrep_rule_id) in implemented_rules.items():
+        connection.execute(
+            text(
+                "UPDATE rules "
+                "SET supported_languages = :supported_languages, "
+                "implementation_status = 'PARTIAL', "
+                "semgrep_rule_id = :semgrep_rule_id, "
+                "severity = 'HIGH' "
+                "WHERE standard_id = :standard_id "
+                "AND implementation_status = 'NOT_IMPLEMENTED' "
+                "AND supported_languages = '[]'"
+            ),
+            {
+                "standard_id": standard_id,
+                "supported_languages": json.dumps(languages),
+                "semgrep_rule_id": semgrep_rule_id,
+            },
+        )
+
+
 SCHEMA_MIGRATIONS: tuple[SchemaMigration, ...] = (
     SchemaMigration(1, "Initial SAST domain schema baseline", _record_initial_schema),
     SchemaMigration(
@@ -189,6 +221,11 @@ SCHEMA_MIGRATIONS: tuple[SchemaMigration, ...] = (
         "Add three roles and initial-password change state to users",
         _upgrade_user_roles_and_password_policy,
         requires_foreign_keys_off=True,
+    ),
+    SchemaMigration(
+        7,
+        "Enable approved certificate validation and deserialization rules",
+        _sync_phase11_builtin_rule_metadata,
     ),
 )
 

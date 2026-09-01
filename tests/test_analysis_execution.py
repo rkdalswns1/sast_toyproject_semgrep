@@ -132,7 +132,7 @@ def test_successful_semgrep_run_collects_json_and_cleans_workspace(tmp_path: Pat
     assert len(provenance["source_sha256"]) == 64
     assert len(provenance["ruleset_sha256"]) == 64
     assert len(provenance["active_rules_sha256"]) == 64
-    assert len(provenance["active_rules"]) == 8
+    assert len(provenance["active_rules"]) == 10
     assert {
         rule["kisa_standard_id"] for rule in provenance["active_rules"]
     } == {
@@ -144,6 +144,8 @@ def test_successful_semgrep_run_collects_json_and_cleans_workspace(tmp_path: Pat
         "제1절-8",
         "제2절-4",
         "제2절-6",
+        "제2절-11",
+        "제5절-5",
     }
     assert all(
         set(rule) == {
@@ -190,8 +192,8 @@ def test_active_rule_snapshot_hash_changes_when_a_rule_is_disabled(
                 return before, before_hash, after, after_hash
 
     before, before_hash, after, after_hash = asyncio.run(exercise())
-    assert len(before) == 8
-    assert len(after) == 7
+    assert len(before) == 10
+    assert len(after) == 9
     assert before_hash != after_hash
     assert "제1절-1" not in {rule["kisa_standard_id"] for rule in after}
 

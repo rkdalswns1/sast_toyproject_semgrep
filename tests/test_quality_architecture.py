@@ -16,7 +16,19 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 RULESET_ROOT = PROJECT_ROOT / "app" / "rules" / "semgrep" / "kisa-2021"
 EXPECTED_STANDARD_IDS = {
     "제1절-1", "제1절-3", "제1절-4", "제1절-5",
-    "제1절-6", "제1절-8", "제2절-4", "제2절-6",
+    "제1절-6", "제1절-8", "제2절-4", "제2절-6", "제2절-11", "제5절-5",
+}
+EXPECTED_RULE_FILES = {
+    "cross-site-scripting": ("제1절-4", 3),
+    "hardcoded-sensitive-information": ("제2절-6", 3),
+    "improper-certificate-validation": ("제2절-11", 3),
+    "os-command-injection": ("제1절-5", 3),
+    "path-traversal": ("제1절-3", 3),
+    "sql-injection": ("제1절-1", 3),
+    "unrestricted-file-upload": ("제1절-6", 3),
+    "unsafe-deserialization": ("제5절-5", 2),
+    "weak-crypto": ("제2절-4", 3),
+    "xml-external-entity": ("제1절-8", 3),
 }
 
 
@@ -46,16 +58,7 @@ def test_analysis_and_finding_routes_have_responsibility_owned_modules() -> None
 
 def test_each_implemented_kisa_item_has_an_independent_rule_file() -> None:
     rule_files = sorted(RULESET_ROOT.glob("*.yml"))
-    assert {rule_file.stem for rule_file in rule_files} == {
-        "cross-site-scripting",
-        "hardcoded-sensitive-information",
-        "os-command-injection",
-        "path-traversal",
-        "sql-injection",
-        "unrestricted-file-upload",
-        "weak-crypto",
-        "xml-external-entity",
-    }
+    assert {rule_file.stem for rule_file in rule_files} == set(EXPECTED_RULE_FILES)
     assert not (RULESET_ROOT.parent / "kisa-2021.yml").exists()
 
     all_rule_ids: set[str] = set()
@@ -66,13 +69,14 @@ def test_each_implemented_kisa_item_has_an_independent_rule_file() -> None:
         standard_ids = re.findall(
             r"^      kisa_standard_id: ([^\n]+)$", content, flags=re.MULTILINE
         )
-        assert len(rule_ids) == 3
-        assert len(standard_ids) == 3
-        assert len(set(standard_ids)) == 1
+        expected_standard_id, expected_language_count = EXPECTED_RULE_FILES[rule_file.stem]
+        assert len(rule_ids) == expected_language_count
+        assert len(standard_ids) == expected_language_count
+        assert set(standard_ids) == {expected_standard_id}
         all_rule_ids.update(rule_ids)
         all_standard_ids.update(standard_ids)
 
-    assert len(all_rule_ids) == 24
+    assert len(all_rule_ids) == 29
     assert all_standard_ids == EXPECTED_STANDARD_IDS
 
 

@@ -1,0 +1,34 @@
+rules:
+  - id: kisa-2021-unsafe-deserialization-python
+    languages: [python]
+    severity: ERROR
+    message: Untrusted request data is passed to an unsafe Python deserializer.
+    metadata:
+      kisa_standard_id: 제5절-5
+      confidence: HIGH
+      recommendation: Use a data-only format such as JSON and validate the decoded structure.
+    mode: taint
+    pattern-sources:
+      - pattern-either:
+          - pattern: request.data
+          - pattern: request.get_data(...)
+          - pattern: flask.request.data
+          - pattern: flask.request.get_data(...)
+    pattern-sinks:
+      - pattern-either:
+          - pattern: pickle.loads(...)
+          - pattern: pickle.load(...)
+
+  - id: kisa-2021-unsafe-deserialization-java
+    languages: [java]
+    severity: ERROR
+    message: Untrusted request data is read through Java native object deserialization.
+    metadata:
+      kisa_standard_id: 제5절-5
+      confidence: HIGH
+      recommendation: Use a data-only format and validate fields instead of native object deserialization.
+    patterns:
+      - pattern-inside: |
+          $STREAM = new ObjectInputStream($REQUEST.getInputStream());
+          ...
+      - pattern: $STREAM.readObject()

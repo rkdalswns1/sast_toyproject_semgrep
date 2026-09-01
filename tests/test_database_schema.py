@@ -90,12 +90,12 @@ def test_create_all_builds_domain_tables_schema_history_and_foreign_keys(
         versions = session.scalars(
             select(SchemaVersion).order_by(SchemaVersion.version)
         ).all()
-        assert [version.version for version in versions] == [1, 2, 3, 4, 5, 6]
+        assert [version.version for version in versions] == [1, 2, 3, 4, 5, 6, 7]
         assert all(version.description and version.applied_at for version in versions)
 
     initialize_database(engine)
     with Session(engine) as session:
-        assert session.scalar(select(func.count()).select_from(SchemaVersion)) == 6
+        assert session.scalar(select(func.count()).select_from(SchemaVersion)) == 7
 
     engine.dispose()
 
@@ -149,7 +149,7 @@ def test_existing_database_is_upgraded_and_migration_is_recorded(
         assert legacy_rule.is_active is True
         assert session.scalars(
             select(SchemaVersion.version).order_by(SchemaVersion.version)
-        ).all() == [1, 2, 3, 4, 5, 6]
+        ).all() == [1, 2, 3, 4, 5, 6, 7]
 
     engine.dispose()
 
@@ -251,6 +251,7 @@ def test_legacy_admin_roles_are_migrated_without_breaking_project_relations(
         assert session.get(User, 1).role is UserRole.SUPER_ADMIN
         assert session.get(User, 2).must_change_password is False
         assert session.get(SchemaVersion, 6) is not None
+        assert session.get(SchemaVersion, 7) is not None
 
     engine.dispose()
 
@@ -290,6 +291,70 @@ def test_existing_catalog_rows_are_upgraded_for_expanded_builtin_rules(
         assert rule.semgrep_rule_id == "kisa-2021-path-traversal-python"
         assert rule.is_active is False
         assert session.get(SchemaVersion, 4) is not None
+
+    engine.dispose()
+
+
+def test_existing_catalog_rows_are_upgraded_for_phase11_rules(tmp_path: Path) -> None:
+    engine = create_db_engine(f"sqlite:///{tmp_path / 'phase11-upgrade.db'}")
+    initialize_database(engine)
+
+    with Session(engine) as session:
+        session.delete(session.get(SchemaVersion, 7))
+        session.add_all(
+            [
+                Rule(
+                    name="부적절한 인증서 유효성 검증",
+                    description="legacy catalog row",
+                    standard_id="제2절-11",
+                    category="보안기능",
+                    item_number=11,
+                    is_active=False,
+                    severity=Severity.INFO,
+                    supported_languages=[],
+                    implementation_status=ImplementationStatus.NOT_IMPLEMENTED,
+                ),
+                Rule(
+                    name="신뢰할 수 없는 데이터의 역직렬화",
+                    description="legacy catalog row",
+                    standard_id="제5절-5",
+                    category="코드오류",
+                    item_number=5,
+                    is_active=False,
+                    severity=Severity.INFO,
+                    supported_languages=[],
+                    implementation_status=ImplementationStatus.NOT_IMPLEMENTED,
+                ),
+            ]
+        )
+        session.commit()
+
+    initialize_database(engine)
+
+    with Session(engine) as session:
+        certificate = session.scalar(
+            select(Rule).where(Rule.standard_id == "제2절-11")
+        )
+        deserialization = session.scalar(
+            select(Rule).where(Rule.standard_id == "제5절-5")
+        )
+        assert certificate is not None
+        assert certificate.severity is Severity.HIGH
+        assert certificate.supported_languages == ["JAVA", "JAVASCRIPT", "PYTHON"]
+        assert certificate.implementation_status is ImplementationStatus.PARTIAL
+        assert certificate.semgrep_rule_id == (
+            "kisa-2021-improper-certificate-validation-python"
+        )
+        assert certificate.is_active is False
+        assert deserialization is not None
+        assert deserialization.severity is Severity.HIGH
+        assert deserialization.supported_languages == ["JAVA", "PYTHON"]
+        assert deserialization.implementation_status is ImplementationStatus.PARTIAL
+        assert deserialization.semgrep_rule_id == (
+            "kisa-2021-unsafe-deserialization-python"
+        )
+        assert deserialization.is_active is False
+        assert session.get(SchemaVersion, 7) is not None
 
     engine.dispose()
 

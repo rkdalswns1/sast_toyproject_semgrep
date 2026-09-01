@@ -1,0 +1,43 @@
+rules:
+  - id: kisa-2021-improper-certificate-validation-python
+    languages: [python]
+    severity: ERROR
+    message: TLS certificate verification is explicitly disabled.
+    metadata:
+      kisa_standard_id: 제2절-11
+      confidence: HIGH
+      recommendation: Keep certificate and hostname verification enabled and trust only an approved CA or certificate.
+    pattern-either:
+      - pattern: requests.$METHOD(..., verify=False, ...)
+      - pattern: $SESSION.verify = False
+      - pattern: ssl._create_unverified_context(...)
+
+  - id: kisa-2021-improper-certificate-validation-java
+    languages: [java]
+    severity: ERROR
+    message: A custom trust manager accepts a server certificate without validation.
+    metadata:
+      kisa_standard_id: 제2절-11
+      confidence: HIGH
+      recommendation: Use the platform TrustManagerFactory and validate the certificate chain and hostname.
+    patterns:
+      - pattern-inside: |
+          class $CLASS implements X509TrustManager {
+            ...
+          }
+      - pattern: |
+          public void checkServerTrusted(...) {
+          }
+
+  - id: kisa-2021-improper-certificate-validation-javascript
+    languages: [javascript]
+    severity: ERROR
+    message: TLS certificate verification is explicitly disabled.
+    metadata:
+      kisa_standard_id: 제2절-11
+      confidence: HIGH
+      recommendation: Keep rejectUnauthorized enabled and use an approved CA for TLS connections.
+    pattern-either:
+      - pattern: process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0"
+      - pattern: 'new https.Agent({..., rejectUnauthorized: false, ...})'
+      - pattern: 'https.request(..., {..., rejectUnauthorized: false, ...}, ...)'

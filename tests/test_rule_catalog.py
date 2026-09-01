@@ -66,6 +66,24 @@ def test_kisa_2021_catalog_seeds_all_49_official_items_idempotently(tmp_path: Pa
                 assert not_implemented is not None
                 assert not_implemented.implementation_status is ImplementationStatus.NOT_IMPLEMENTED
                 assert not_implemented.supported_languages == []
+                certificate = session.scalar(
+                    select(Rule).where(Rule.standard_id == "제2절-11")
+                )
+                assert certificate is not None
+                assert certificate.implementation_status is ImplementationStatus.PARTIAL
+                assert certificate.supported_languages == ["JAVA", "JAVASCRIPT", "PYTHON"]
+                assert certificate.semgrep_rule_id == (
+                    "kisa-2021-improper-certificate-validation-python"
+                )
+                deserialization = session.scalar(
+                    select(Rule).where(Rule.standard_id == "제5절-5")
+                )
+                assert deserialization is not None
+                assert deserialization.implementation_status is ImplementationStatus.PARTIAL
+                assert deserialization.supported_languages == ["JAVA", "PYTHON"]
+                assert deserialization.semgrep_rule_id == (
+                    "kisa-2021-unsafe-deserialization-python"
+                )
                 sql_injection.is_active = False
                 session.commit()
 

@@ -3,42 +3,47 @@
     "vulnerable_file": "vulnerable.py",
     "safe_file": "safe.py",
     "findings": {
-      "제1절-1": {"line": 4, "severity": "HIGH", "confidence": "HIGH"},
-      "제1절-3": {"line": 9, "severity": "HIGH", "confidence": "HIGH"},
-      "제1절-4": {"line": 8, "severity": "HIGH", "confidence": "HIGH"},
-      "제1절-6": {"line": 10, "severity": "HIGH", "confidence": "HIGH"},
-      "제1절-8": {"line": 11, "severity": "HIGH", "confidence": "HIGH"},
-      "제1절-5": {"line": 5, "severity": "HIGH", "confidence": "HIGH"},
-      "제2절-6": {"line": 6, "severity": "HIGH", "confidence": "MEDIUM"},
-      "제2절-4": {"line": 7, "severity": "MEDIUM", "confidence": "HIGH"}
+      "제1절-1": {"line": 6, "severity": "HIGH", "confidence": "HIGH"},
+      "제1절-3": {"line": 11, "severity": "HIGH", "confidence": "HIGH"},
+      "제1절-4": {"line": 10, "severity": "HIGH", "confidence": "HIGH"},
+      "제1절-6": {"line": 12, "severity": "HIGH", "confidence": "HIGH"},
+      "제1절-8": {"line": 13, "severity": "HIGH", "confidence": "HIGH"},
+      "제1절-5": {"line": 7, "severity": "HIGH", "confidence": "HIGH"},
+      "제2절-6": {"line": 8, "severity": "HIGH", "confidence": "MEDIUM"},
+      "제2절-4": {"line": 9, "severity": "MEDIUM", "confidence": "HIGH"},
+      "제2절-11": {"line": 14, "severity": "HIGH", "confidence": "HIGH"},
+      "제5절-5": {"line": 16, "severity": "HIGH", "confidence": "HIGH"}
     }
   },
   "JAVA": {
     "vulnerable_file": "Vulnerable.java",
     "safe_file": "Safe.java",
     "findings": {
-      "제1절-1": {"line": 6, "severity": "HIGH", "confidence": "HIGH"},
-      "제1절-3": {"line": 11, "severity": "HIGH", "confidence": "HIGH"},
-      "제1절-4": {"line": 10, "severity": "HIGH", "confidence": "HIGH"},
-      "제1절-6": {"line": 12, "severity": "HIGH", "confidence": "HIGH"},
-      "제1절-8": {"line": 13, "severity": "HIGH", "confidence": "MEDIUM"},
-      "제1절-5": {"line": 7, "severity": "HIGH", "confidence": "HIGH"},
-      "제2절-6": {"line": 8, "severity": "HIGH", "confidence": "MEDIUM"},
-      "제2절-4": {"line": 9, "severity": "MEDIUM", "confidence": "HIGH"}
+      "제1절-1": {"line": 16, "severity": "HIGH", "confidence": "HIGH"},
+      "제1절-3": {"line": 21, "severity": "HIGH", "confidence": "HIGH"},
+      "제1절-4": {"line": 20, "severity": "HIGH", "confidence": "HIGH"},
+      "제1절-6": {"line": 22, "severity": "HIGH", "confidence": "HIGH"},
+      "제1절-8": {"line": 23, "severity": "HIGH", "confidence": "MEDIUM"},
+      "제1절-5": {"line": 17, "severity": "HIGH", "confidence": "HIGH"},
+      "제2절-6": {"line": 18, "severity": "HIGH", "confidence": "MEDIUM"},
+      "제2절-4": {"line": 19, "severity": "MEDIUM", "confidence": "HIGH"},
+      "제2절-11": {"line": 11, "severity": "HIGH", "confidence": "HIGH"},
+      "제5절-5": {"line": 25, "severity": "HIGH", "confidence": "HIGH"}
     }
   },
   "JAVASCRIPT": {
     "vulnerable_file": "vulnerable.js",
     "safe_file": "safe.js",
     "findings": {
-      "제1절-1": {"line": 4, "severity": "HIGH", "confidence": "HIGH"},
-      "제1절-3": {"line": 9, "severity": "HIGH", "confidence": "HIGH"},
-      "제1절-4": {"line": 8, "severity": "HIGH", "confidence": "HIGH"},
-      "제1절-6": {"line": 10, "severity": "HIGH", "confidence": "HIGH"},
-      "제1절-8": {"line": 11, "severity": "HIGH", "confidence": "HIGH"},
-      "제1절-5": {"line": 5, "severity": "HIGH", "confidence": "HIGH"},
-      "제2절-6": {"line": 6, "severity": "HIGH", "confidence": "MEDIUM"},
-      "제2절-4": {"line": 7, "severity": "MEDIUM", "confidence": "HIGH"}
+      "제1절-1": {"line": 5, "severity": "HIGH", "confidence": "HIGH"},
+      "제1절-3": {"line": 10, "severity": "HIGH", "confidence": "HIGH"},
+      "제1절-4": {"line": 9, "severity": "HIGH", "confidence": "HIGH"},
+      "제1절-6": {"line": 11, "severity": "HIGH", "confidence": "HIGH"},
+      "제1절-8": {"line": 12, "severity": "HIGH", "confidence": "HIGH"},
+      "제1절-5": {"line": 6, "severity": "HIGH", "confidence": "HIGH"},
+      "제2절-6": {"line": 7, "severity": "HIGH", "confidence": "MEDIUM"},
+      "제2절-4": {"line": 8, "severity": "MEDIUM", "confidence": "HIGH"},
+      "제2절-11": {"line": 13, "severity": "HIGH", "confidence": "HIGH"}
     }
   }
 }

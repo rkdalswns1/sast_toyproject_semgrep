@@ -1,5 +1,6 @@
 const child_process = require("child_process");
 const crypto = require("crypto");
+const https = require("https");
 function run(db, userInput, res) {
   db.query("SELECT * FROM users WHERE name=" + userInput);
   child_process.exec(userInput);
@@ -9,4 +10,5 @@ function run(db, userInput, res) {
   fs.readFile("/srv/data/" + userInput, callback);
   upload.mv("/srv/uploads/" + upload.name);
   libxmljs.parseXml(xmlInput, {noent: true});
+  const agent = new https.Agent({rejectUnauthorized: false});
 }

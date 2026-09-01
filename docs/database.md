@@ -69,6 +69,7 @@ DiagnosticRule은 카탈로그의 공식 ID·명칭을 복제하지 않는다. �
 - 버전 4는 기존 DB에서 새로 구현된 경로 조작, XSS, 위험한 파일 업로드, XXE 카탈로그 행의 구현 상태·지원 언어·대표 Semgrep Rule ID를 동기화한다. 관리자가 변경한 카탈로그 활성 상태는 보존한다.
 - 버전 5는 기존 Finding의 `raw_result.path`를 이미 정규화된 `file_path`와 동일한 소스 상대경로로 변경한다. 나머지 Semgrep 원본 필드는 유지한다.
 - 버전 6은 `users.role` 제약을 `SUPER_ADMIN`, `PROJECT_MANAGER`, `USER`로 교체하고 기존 `ADMIN`을 `SUPER_ADMIN`으로 변환하며 `must_change_password` 컬럼을 추가한다. 기존 사용자 관계와 식별자·해시·활성 상태·시각은 보존한다.
+- 버전 7은 기존 DB의 인증서 유효성 검증과 신뢰할 수 없는 데이터의 역직렬화 카탈로그 행을 `PARTIAL`로 전환하고 지원 언어·대표 Semgrep Rule ID·기본 심각도를 동기화한다. 관리자가 변경한 활성 상태는 보존한다.
 
 ## Deletion Policy
 

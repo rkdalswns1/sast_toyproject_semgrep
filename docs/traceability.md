@@ -12,7 +12,7 @@ isolated upload directory; no test uses the developer's local project data.
 | SFR-008 | Implemented | ZIP upload and Semgrep execution POST are limited to SUPER_ADMIN or the assigned PROJECT_MANAGER in `app/analysis/routes.py` |
 | SFR-009 | Implemented | Per-run source/ruleset hashes, active-rule list/hash, source snapshot, engine version and detected language in `AnalysisRun.summary.provenance` |
 | SFR-010 | Implemented | Central registry and extension-based detection in `app/analysis/languages.py`; project forms and scanner use the same profiles |
-| SFR-011 | Implemented (PARTIAL rules) | Java, JavaScript and Python each map the same eight KISA items; real-engine tests in `tests/test_rule_catalog.py` and `tests/test_diagnostic_examples.py` |
+| SFR-011 | Implemented (PARTIAL rules) | Java, JavaScript and Python share nine KISA items; Java and Python additionally map unsafe deserialization. Real-engine tests are in `tests/test_rule_catalog.py` and `tests/test_diagnostic_examples.py` |
 | SFR-012 | Implemented | Developers maintain Semgrep YAML files; SUPER_ADMIN registers and edits KISA item, language and Rule ID mappings through `/rules/new`, and persisted mappings control Finding storage. |
 | SFR-013 | Implemented | Authenticated catalog list/detail, filters and SUPER_ADMIN management separation in `app/rules/routes.py` and rule templates |
 
@@ -93,14 +93,17 @@ isolated upload directory; no test uses the developer's local project data.
 
 - The catalog contains all 49 implementation-stage items from the supplied
   KISA 2021 guide.
-- Eight KISA items are intentionally `PARTIAL` for Python, Java, and JavaScript:
+- Nine KISA items are intentionally `PARTIAL` for Python, Java, and JavaScript:
   SQL injection, path traversal/resource injection, cross-site scripting,
   operating system command injection, unrestricted file upload, XML external
-  entity reference, hardcoded sensitive information, and weak cryptographic algorithms.
-- The other 41 catalog items are `NOT_IMPLEMENTED`; the application does not
+  entity reference, hardcoded sensitive information, weak cryptographic algorithms,
+  and improper certificate validation.
+- Unsafe deserialization is additionally `PARTIAL` for Java and Python.
+- The other 39 catalog items are `NOT_IMPLEMENTED`; the application does not
   claim automatic detection for them.
 - Python, Java, and JavaScript use language-specific Semgrep rules mapped to
-  the same eight KISA catalog entries through `kisa_standard_id` metadata.
+  catalog entries through `kisa_standard_id` metadata; unsupported language-item
+  combinations are not advertised or executed.
 - The end-to-end test performs login, project creation, membership assignment,
   ZIP upload, real Semgrep analysis, Finding storage and detail viewing, then
   verifies both assigned-user access and unassigned-user 404 behavior.
