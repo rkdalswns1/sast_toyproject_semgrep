@@ -9,11 +9,15 @@
     <div class="header-actions"><a class="secondary button" href="/projects">목록</a>{% if can_manage_project %}<a class="secondary button" href="/projects/{{ project.id }}/users">사용자 할당</a><a class="button" href="/projects/{{ project.id }}/edit">프로젝트 수정</a>{% endif %}</div>
   </header>
   <section class="card metadata-grid">
-    <div><span>언어</span><strong>{{ project.language.value }}</strong></div>
+    <div><span>기준 언어</span><strong>{{ project.language.value }}</strong></div>
+    <div><span>분석 모드</span><strong>{{ "지원 언어 자동 감지" if project.scan_all_languages else "단일 언어" }}</strong></div>
     <div><span>소스 유형</span><strong>{{ project.source_type.value }}</strong></div>
+    <div><span>소스 버전</span><strong>{{ project.source_version or '-' }}</strong></div>
+    <div><span>배포 버전</span><strong>{{ project.deployment_version or '-' }}</strong></div>
     <div><span>생성자</span><strong>{{ project.creator.username }}</strong></div>
     <div><span>생성 일시</span><strong>{{ project.created_at.strftime('%Y-%m-%d %H:%M') }}</strong></div>
   </section>
+  {% if project.source_description %}<section class="card top-gap"><h2>현재 소스 설명</h2><p>{{ project.source_description }}</p></section>{% endif %}
   {% if can_manage_project %}
   <section class="card top-gap">
     <h2>ZIP 소스 업로드</h2>
@@ -24,6 +28,10 @@
     <form method="post" action="/projects/{{ project.id }}/analysis" enctype="multipart/form-data" class="form-stack">
       <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
       <label>ZIP 파일<input type="file" name="source_file" accept=".zip,application/zip" required></label>
+      <label>소스 버전<input type="text" name="source_version" maxlength="100" value="{{ submitted_source_metadata.source_version if submitted_source_metadata is defined else (project.source_version or '') }}" placeholder="예: commit-8f23a1 또는 1.4.0"></label>
+      <label>배포 버전<input type="text" name="deployment_version" maxlength="100" value="{{ submitted_source_metadata.deployment_version if submitted_source_metadata is defined else (project.deployment_version or '') }}" placeholder="예: release-2026.09"></label>
+      <label>소스 설명<textarea name="source_description" rows="4" maxlength="2000" placeholder="분석 대상과 변경 사항을 입력하세요.">{{ submitted_source_metadata.source_description if submitted_source_metadata is defined else (project.source_description or '') }}</textarea></label>
+      <p class="muted">버전과 설명은 선택 입력이며, 분석 실행 시점의 기록으로 보존됩니다.</p>
       <button type="submit">ZIP 소스 저장</button>
     </form>
     {% if project.source_path %}

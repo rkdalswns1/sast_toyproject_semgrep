@@ -46,18 +46,25 @@ POST /projects/{project_id}/users
 POST /projects/{project_id}/analysis
 GET  /projects/{project_id}/analysis
 GET  /analysis/{analysis_id}
+GET  /analysis/{analysis_id}/report.csv
+GET  /analysis/{analysis_id}/report.pdf
 ```
 
 `POST /projects/{project_id}/analysis`는 SUPER_ADMIN 또는 해당 프로젝트에 할당된 PROJECT_MANAGER만 사용할 수 있다. USER는 할당된 프로젝트의 분석 이력과 완료된 결과를 읽기 전용으로 조회할 수 있다. 분석 실패 원문은 SUPER_ADMIN과 담당 PROJECT_MANAGER에게만 표시한다.
+
+ZIP 파일이 포함된 POST는 선택 입력인 `source_version`, `deployment_version`, `source_description`을 함께 받아 최신 프로젝트 소스 정보로 저장한다. 파일이 없는 POST는 현재 저장된 소스와 메타데이터를 스냅샷하여 분석을 실행한다.
+
+두 보고서 GET은 SUPER_ADMIN 또는 해당 프로젝트에 할당된 PROJECT_MANAGER·USER가 사용할 수 있다. 접근할 수 없는 분석 ID는 `404`로 처리한다. 응답 파일명은 사용자 입력을 사용하지 않고 분석 ID만 사용하며 `Content-Disposition: attachment`로 제공한다.
 
 ## Findings
 
 ```text
 GET /analysis/{analysis_id}/findings
 GET /findings/{finding_id}
+POST /findings/{finding_id}/status
 ```
 
-Finding 목록은 `severity`와 `confidence` query parameter를 지원한다. 권한이 없는 프로젝트나 분석 ID는 정보 노출을 막기 위해 404로 처리한다.
+Finding 목록은 `severity`, `confidence`, `status` query parameter를 지원한다. 권한이 없는 프로젝트나 분석 ID는 정보 노출을 막기 위해 404로 처리한다. 상태 변경 POST는 SUPER_ADMIN 또는 해당 프로젝트에 할당된 PROJECT_MANAGER만 사용할 수 있으며 CSRF 검증을 적용한다.
 
 ## Rules
 

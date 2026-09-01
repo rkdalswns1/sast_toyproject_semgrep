@@ -11,10 +11,11 @@ isolated upload directory; no test uses the developer's local project data.
 | SFR-003 | Implemented | SUPER_ADMIN/PROJECT_MANAGER/USER checks in auth and project routes; role integration assertions in `tests/test_authentication.py`, `tests/test_projects.py`, and `tests/test_end_to_end.py` |
 | SFR-008 | Implemented | ZIP upload and Semgrep execution POST are limited to SUPER_ADMIN or the assigned PROJECT_MANAGER in `app/analysis/routes.py` |
 | SFR-009 | Implemented | Per-run source/ruleset hashes, active-rule list/hash, source snapshot, engine version and detected language in `AnalysisRun.summary.provenance` |
-| SFR-010 | Implemented | Central registry and extension-based detection in `app/analysis/languages.py`; project forms and scanner use the same profiles |
+| SFR-010 | Implemented | Central registry and extension-based detection in `app/analysis/languages.py`; project forms and scanner support single-language and detected multi-language modes |
 | SFR-011 | Implemented (PARTIAL rules) | Java, JavaScript and Python share nine KISA items; Java and Python additionally map unsafe deserialization. Real-engine tests are in `tests/test_rule_catalog.py` and `tests/test_diagnostic_examples.py` |
 | SFR-012 | Implemented | Developers maintain Semgrep YAML files; SUPER_ADMIN registers and edits KISA item, language and Rule ID mappings through `/rules/new`, and persisted mappings control Finding storage. |
 | SFR-013 | Implemented | Authenticated catalog list/detail, filters and SUPER_ADMIN management separation in `app/rules/routes.py` and rule templates |
+| Phase 15 report export | Implemented | Per-analysis CSV/PDF generation and protected download routes in `app/analysis/reports.py` and `app/analysis/routes.py` |
 
 ## Data Requirement Status
 
@@ -22,7 +23,7 @@ isolated upload directory; no test uses the developer's local project data.
 |---|---|---|
 | DAR-001 | Implemented | SQLite transactions/FKs plus ordered migrations in `app/db/migrations.py` and applied history in `schema_versions` |
 | DAR-002 | Implemented | `User` model includes three roles and `must_change_password`; schema/migration/authentication tests |
-| DAR-003 | Implemented | `Project` model and project tests |
+| DAR-003 | Implemented | `Project` model stores the baseline language and multi-language scan setting; project and migration tests |
 | DAR-004 | Implemented | `ProjectUser` composite relationship and access tests |
 | DAR-005 | Implemented | `AnalysisRun` model, lifecycle service and execution tests |
 | DAR-006 | Implemented | normalized `Finding` model/service and Finding tests |
@@ -30,6 +31,8 @@ isolated upload directory; no test uses the developer's local project data.
 | DAR-008 | Implemented | Finding snapshots rule name, KISA ID, language, severity and confidence at analysis time |
 | DAR-009 | Implemented | JSON `AnalysisRun.summary`, `Finding.evidence` and `Finding.raw_result`; transient workspace paths are normalized to source-relative paths before persistence |
 | DAR-010 | Implemented | SQLite FK enforcement and CASCADE/RESTRICT relationship tests |
+| DAR-011 | Implemented | FindingWorkflow 1:1 model stores latest remediation status, note, updater and timestamp; migration and Finding tests |
+| DAR-012 | Implemented | Project stores current ZIP source/deployment versions and description; AnalysisRun provenance snapshots them for immutable history |
 
 ## Security Requirement Status
 
@@ -45,6 +48,8 @@ isolated upload directory; no test uses the developer's local project data.
 | SEC-008 | Implemented | ZIP signature, traversal, absolute path, link, special file, duplicate path, encrypted archive and byte-limit checks in `app/projects/upload.py` |
 | SEC-009 | Implemented | Upload limits plus Semgrep jobs, memory, target, JSON output, bounded stderr and wall-time limits; process-group termination and operator-only error detail tests |
 | SEC-010 | Implemented | Exact pins in `requirements.txt`, weekly Dependabot configuration, license inventory and update response policy in `docs/security.md` |
+| SEC-011 | Implemented | SUPER_ADMIN/assigned PROJECT_MANAGER remediation updates, USER read-only and inaccessible-resource 404 tests |
+| SEC-012 | Implemented | Report routes reuse project access checks; CSV formula escaping and report-field exclusion tests prevent unsafe or internal data export |
 
 ## Test Requirement Status
 
@@ -70,9 +75,12 @@ isolated upload directory; no test uses the developer's local project data.
 | ZIP Slip, symbolic link, path traversal, and size limits | `app/projects/upload.py` | `tests/test_source_upload.py` |
 | SUPER_ADMIN/assigned PROJECT_MANAGER source mutation and analysis; USER read-only results | `app/analysis/routes.py`, project/analysis templates | `tests/test_end_to_end.py` |
 | Semgrep per-run workspace isolation, minimal child environment, timeout, error status, JSON collection, and per-run provenance | `app/analysis/service.py` | `tests/test_analysis_execution.py` |
-| Registered-language detection and language-scoped scanning | `app/analysis/languages.py`, `app/analysis/service.py` | `tests/test_analysis_execution.py`, `tests/test_rule_catalog.py` |
+| Registered-language detection and single/multi-language scanning | `app/analysis/languages.py`, `app/analysis/service.py` | `tests/test_analysis_execution.py`, `tests/test_rule_catalog.py` |
 | Git-ignored upload source scanning | `app/analysis/service.py` (`--no-git-ignore`) | `tests/test_analysis_execution.py`, `tests/test_end_to_end.py` |
 | Normalized Finding persistence, filters, details, and raw result preservation | `app/findings/services.py`, finding routes/templates | `tests/test_findings.py`, `tests/test_end_to_end.py` |
+| Finding remediation workflow and analysis executor display | `app/findings/services.py`, finding/analysis routes and templates | `tests/test_findings.py`, `tests/test_end_to_end.py` |
+| ZIP source metadata and per-analysis snapshot | `app/projects/services.py`, `app/analysis/service.py`, project/analysis templates | `tests/test_source_upload.py`, `tests/test_analysis_execution.py`, `tests/test_database_schema.py` |
+| Per-analysis CSV/PDF reports | `app/analysis/reports.py`, report routes and analysis detail template | `tests/test_reports.py` |
 | Finding/project access boundaries | `app/projects/access.py`, `app/findings/routes.py` | `tests/test_projects.py`, `tests/test_end_to_end.py` |
 | KISA 2021 implementation-stage 49-item catalog | `app/rules/catalog.py`, `app/rules/services.py` | `tests/test_rule_catalog.py` |
 | Implemented local Semgrep rules and supported language status | `app/rules/semgrep/kisa-2021/`, `app/rules/catalog.py` | `tests/test_rule_catalog.py`, `tests/test_end_to_end.py` |
@@ -87,7 +95,7 @@ isolated upload directory; no test uses the developer's local project data.
 | QLT-002 | Implemented | One KISA item per YAML under `app/rules/semgrep/kisa-2021/`; file independence and whole-ruleset provenance tests |
 | QLT-003 | Implemented | Central language registry plus shared AnalysisRun/Finding pipeline; all supported languages exercise the same flow in diagnostic tests |
 | QLT-004 | Implemented | `app/findings/services.py` normalizes every result to the common Finding model, including relative paths in both normalized and raw-result fields; cross-language field assertions in diagnostic tests |
-| QLT-005 | Implemented | FK constraints, run-derived Finding language and Rule-language compatibility checks; schema and quality consistency tests |
+| QLT-005 | Implemented | FK constraints, DiagnosticRule-derived Finding language and Rule-language compatibility checks; schema and quality consistency tests |
 
 ## Verification Scope and Current Coverage
 

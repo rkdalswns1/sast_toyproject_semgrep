@@ -10,6 +10,7 @@ from app.db.models import (
     AnalysisRun,
     DiagnosticRule,
     Finding,
+    FindingWorkflow,
     Project,
     ProjectUser,
     Rule,
@@ -19,6 +20,7 @@ from app.db.models import (
 from app.db.models.enums import (
     AnalysisStatus,
     Confidence,
+    FindingStatus,
     ImplementationStatus,
     Language,
     Severity,
@@ -34,6 +36,7 @@ EXPECTED_TABLES = {
     "analysis_runs",
     "rules",
     "findings",
+    "finding_workflows",
     "diagnostic_rules",
     "schema_versions",
 }
@@ -53,6 +56,10 @@ EXPECTED_FOREIGN_KEYS = {
         ("rule_id", "rules", "id", "RESTRICT"),
     },
     "diagnostic_rules": {("catalog_rule_id", "rules", "id", "CASCADE")},
+    "finding_workflows": {
+        ("finding_id", "findings", "id", "CASCADE"),
+        ("updated_by", "users", "id", "RESTRICT"),
+    },
 }
 
 
@@ -90,12 +97,12 @@ def test_create_all_builds_domain_tables_schema_history_and_foreign_keys(
         versions = session.scalars(
             select(SchemaVersion).order_by(SchemaVersion.version)
         ).all()
-        assert [version.version for version in versions] == [1, 2, 3, 4, 5, 6, 7]
+        assert [version.version for version in versions] == [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
         assert all(version.description and version.applied_at for version in versions)
 
     initialize_database(engine)
     with Session(engine) as session:
-        assert session.scalar(select(func.count()).select_from(SchemaVersion)) == 7
+        assert session.scalar(select(func.count()).select_from(SchemaVersion)) == 10
 
     engine.dispose()
 
@@ -149,7 +156,7 @@ def test_existing_database_is_upgraded_and_migration_is_recorded(
         assert legacy_rule.is_active is True
         assert session.scalars(
             select(SchemaVersion.version).order_by(SchemaVersion.version)
-        ).all() == [1, 2, 3, 4, 5, 6, 7]
+        ).all() == [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
 
     engine.dispose()
 
@@ -252,6 +259,9 @@ def test_legacy_admin_roles_are_migrated_without_breaking_project_relations(
         assert session.get(User, 2).must_change_password is False
         assert session.get(SchemaVersion, 6) is not None
         assert session.get(SchemaVersion, 7) is not None
+        assert session.get(SchemaVersion, 8) is not None
+        assert session.get(SchemaVersion, 9) is not None
+        assert session.get(SchemaVersion, 10) is not None
 
     engine.dispose()
 
@@ -359,6 +369,167 @@ def test_existing_catalog_rows_are_upgraded_for_phase11_rules(tmp_path: Path) ->
     engine.dispose()
 
 
+def test_existing_projects_default_to_single_language_after_phase12_migration(
+    tmp_path: Path,
+) -> None:
+    engine = create_db_engine(f"sqlite:///{tmp_path / 'phase12-upgrade.db'}")
+    initialize_database(engine)
+
+    with engine.begin() as connection:
+        connection.execute(
+            text(
+                "INSERT INTO users (username, password_hash, role, is_active, "
+                "must_change_password) VALUES "
+                "('legacy@company.com', 'hash', 'USER', 1, 0)"
+            )
+        )
+        user_id = connection.execute(
+            text("SELECT id FROM users WHERE username = 'legacy@company.com'")
+        ).scalar_one()
+        connection.execute(
+            text(
+                "INSERT INTO projects (name, source_type, language, source_path, "
+                "created_by, scan_all_languages) VALUES "
+                "('Legacy project', 'ZIP', 'PYTHON', '', :user_id, 1)"
+            ),
+            {"user_id": user_id},
+        )
+        connection.execute(text("DELETE FROM schema_versions WHERE version = 8"))
+        connection.execute(text("ALTER TABLE projects DROP COLUMN scan_all_languages"))
+
+    initialize_database(engine)
+
+    with Session(engine) as session:
+        project = session.scalar(
+            select(Project).where(Project.name == "Legacy project")
+        )
+        assert project is not None
+        assert project.language is Language.PYTHON
+        assert project.scan_all_languages is False
+        assert session.get(SchemaVersion, 8) is not None
+
+    engine.dispose()
+
+
+def test_phase13_migration_backfills_open_workflow_for_existing_finding(
+    tmp_path: Path,
+) -> None:
+    engine = create_db_engine(f"sqlite:///{tmp_path / 'phase13-upgrade.db'}")
+    initialize_database(engine)
+
+    with Session(engine) as session:
+        user = User(
+            username="owner@company.com",
+            password_hash="hash",
+            role=UserRole.SUPER_ADMIN,
+        )
+        session.add(user)
+        session.flush()
+        project = Project(
+            name="Legacy Finding project",
+            source_type=SourceType.ZIP,
+            language=Language.PYTHON,
+            source_path="",
+            created_by=user.id,
+        )
+        session.add(project)
+        session.flush()
+        run = AnalysisRun(
+            project_id=project.id,
+            engine="Semgrep",
+            language=Language.PYTHON,
+            status=AnalysisStatus.COMPLETED,
+            executed_by=user.id,
+        )
+        rule = Rule(
+            name="Legacy rule",
+            description="legacy",
+            standard_id="LEGACY-WORKFLOW",
+            category="test",
+            severity=Severity.HIGH,
+            supported_languages=["PYTHON"],
+            implementation_status=ImplementationStatus.PARTIAL,
+        )
+        session.add_all([run, rule])
+        session.flush()
+        finding = Finding(
+            analysis_run_id=run.id,
+            rule_id=rule.id,
+            rule_name=rule.name,
+            kisa_id=rule.standard_id,
+            language=Language.PYTHON,
+            severity=Severity.HIGH,
+            confidence=Confidence.HIGH,
+            file_path="legacy.py",
+            start_line=1,
+            message="legacy",
+            raw_result={"path": "legacy.py"},
+        )
+        session.add(finding)
+        session.flush()
+        finding_id = finding.id
+        session.delete(session.get(SchemaVersion, 9))
+        session.commit()
+
+    initialize_database(engine)
+
+    with Session(engine) as session:
+        workflow = session.get(FindingWorkflow, finding_id)
+        assert workflow is not None
+        assert workflow.status is FindingStatus.OPEN
+        assert workflow.note is None
+        assert workflow.updated_by is None
+        assert workflow.updated_at is None
+        assert session.get(SchemaVersion, 9) is not None
+
+    engine.dispose()
+
+
+def test_phase14_migration_adds_nullable_source_metadata_to_existing_project(
+    tmp_path: Path,
+) -> None:
+    engine = create_db_engine(f"sqlite:///{tmp_path / 'phase14-upgrade.db'}")
+    initialize_database(engine)
+
+    with engine.begin() as connection:
+        connection.execute(
+            text(
+                "INSERT INTO users (username, password_hash, role, is_active, "
+                "must_change_password) VALUES "
+                "('source-owner@company.com', 'hash', 'SUPER_ADMIN', 1, 0)"
+            )
+        )
+        user_id = connection.execute(
+            text("SELECT id FROM users WHERE username = 'source-owner@company.com'")
+        ).scalar_one()
+        connection.execute(
+            text(
+                "INSERT INTO projects (name, source_type, language, source_path, "
+                "created_by, scan_all_languages) VALUES "
+                "('Legacy source project', 'ZIP', 'PYTHON', '', :user_id, 0)"
+            ),
+            {"user_id": user_id},
+        )
+        connection.execute(text("DELETE FROM schema_versions WHERE version = 10"))
+        connection.execute(text("ALTER TABLE projects DROP COLUMN source_version"))
+        connection.execute(text("ALTER TABLE projects DROP COLUMN deployment_version"))
+        connection.execute(text("ALTER TABLE projects DROP COLUMN source_description"))
+
+    initialize_database(engine)
+
+    with Session(engine) as session:
+        project = session.scalar(
+            select(Project).where(Project.name == "Legacy source project")
+        )
+        assert project is not None
+        assert project.source_version is None
+        assert project.deployment_version is None
+        assert project.source_description is None
+        assert session.get(SchemaVersion, 10) is not None
+
+    engine.dispose()
+
+
 def test_documented_enum_constraints_are_created(tmp_path: Path) -> None:
     engine = create_db_engine(f"sqlite:///{tmp_path / 'enums.db'}")
     initialize_database(engine)
@@ -381,6 +552,7 @@ def test_documented_enum_constraints_are_created(tmp_path: Path) -> None:
         "finding_language",
         "finding_severity",
         "finding_confidence",
+        "finding_status",
         "rule_item_number_positive",
     } <= constraint_names
 

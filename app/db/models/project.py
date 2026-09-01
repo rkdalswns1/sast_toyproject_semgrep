@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from sqlalchemy import ForeignKey, String, Text
+from sqlalchemy import Boolean, ForeignKey, String, Text, false
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
@@ -29,7 +29,13 @@ class Project(TimestampMixin, Base):
     language: Mapped[Language] = mapped_column(
         persisted_enum(Language, "project_language"), nullable=False
     )
+    scan_all_languages: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default=false()
+    )
     source_path: Mapped[str] = mapped_column(String(500), nullable=False)
+    source_version: Mapped[str | None] = mapped_column(String(100))
+    deployment_version: Mapped[str | None] = mapped_column(String(100))
+    source_description: Mapped[str | None] = mapped_column(Text)
     created_by: Mapped[int] = mapped_column(
         ForeignKey("users.id", ondelete="RESTRICT"), nullable=False, index=True
     )
@@ -64,4 +70,3 @@ class ProjectUser(Base):
 
     project: Mapped[Project] = relationship(back_populates="memberships")
     user: Mapped[User] = relationship(back_populates="project_memberships")
-

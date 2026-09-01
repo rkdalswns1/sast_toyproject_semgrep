@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -14,12 +16,47 @@ class ProjectManagementError(ValueError):
     """Raised when a project operation cannot be completed safely."""
 
 
+SOURCE_VERSION_MAX_LENGTH = 100
+SOURCE_DESCRIPTION_MAX_LENGTH = 2_000
+
+
+def normalize_source_metadata(
+    *,
+    source_version: str | None,
+    deployment_version: str | None,
+    source_description: str | None,
+) -> tuple[str | None, str | None, str | None]:
+    """Normalize and validate optional metadata before storing a ZIP."""
+    normalized_source_version = source_version.strip() if source_version else None
+    normalized_deployment_version = (
+        deployment_version.strip() if deployment_version else None
+    )
+    normalized_description = (
+        source_description.strip() if source_description else None
+    )
+    if normalized_source_version and len(normalized_source_version) > SOURCE_VERSION_MAX_LENGTH:
+        raise ProjectManagementError("소스 버전은 100자 이하여야 합니다.")
+    if (
+        normalized_deployment_version
+        and len(normalized_deployment_version) > SOURCE_VERSION_MAX_LENGTH
+    ):
+        raise ProjectManagementError("배포 버전은 100자 이하여야 합니다.")
+    if normalized_description and len(normalized_description) > SOURCE_DESCRIPTION_MAX_LENGTH:
+        raise ProjectManagementError("소스 설명은 2,000자 이하여야 합니다.")
+    return (
+        normalized_source_version or None,
+        normalized_deployment_version or None,
+        normalized_description or None,
+    )
+
+
 def create_project(
     session: Session,
     *,
     name: str,
     description: str | None,
     language: Language,
+    scan_all_languages: bool = False,
     created_by: int,
 ) -> Project:
     normalized_name = name.strip()
@@ -31,6 +68,7 @@ def create_project(
         description=description.strip() or None if description else None,
         source_type=SourceType.ZIP,
         language=language,
+        scan_all_languages=scan_all_languages,
         source_path="",
         created_by=created_by,
     )
@@ -48,6 +86,7 @@ def update_project(
     name: str,
     description: str | None,
     language: Language,
+    scan_all_languages: bool = False,
 ) -> Project:
     normalized_name = name.strip()
     if not normalized_name:
@@ -60,6 +99,7 @@ def update_project(
         project.name = normalized_name
         project.description = description.strip() or None if description else None
         project.language = language
+        project.scan_all_languages = scan_all_languages
     return project
 
 
@@ -89,10 +129,28 @@ def replace_project_members(
         )
 
 
-def update_project_source(session: Session, *, project_id: int, source_path: Path) -> None:
+def update_project_source(
+    session: Session,
+    *,
+    project_id: int,
+    source_path: Path,
+    source_version: str | None = None,
+    deployment_version: str | None = None,
+    source_description: str | None = None,
+) -> None:
     """Persist only a workspace path created by the upload service."""
+    normalized_metadata = normalize_source_metadata(
+        source_version=source_version,
+        deployment_version=deployment_version,
+        source_description=source_description,
+    )
     with session.begin():
         project = session.get(Project, project_id)
         if project is None:
             raise ProjectManagementError("프로젝트를 찾을 수 없습니다.")
         project.source_path = str(source_path)
+        (
+            project.source_version,
+            project.deployment_version,
+            project.source_description,
+        ) = normalized_metadata

@@ -66,7 +66,13 @@ async def _login_and_upload(client: AsyncClient, project_id: int) -> str:
     detail = await client.get(f"/projects/{project_id}")
     token = _csrf_token(detail.text)
     upload = await client.post(
-        f"/projects/{project_id}/analysis", data={"csrf_token": token},
+        f"/projects/{project_id}/analysis",
+        data={
+            "source_version": "source-2.0.0",
+            "deployment_version": "deploy-42",
+            "source_description": "분석 실행 시점 설명",
+            "csrf_token": token,
+        },
         files={"source_file": ("source.zip", _zip_bytes(), "application/zip")},
     )
     assert upload.status_code == 303
@@ -129,6 +135,13 @@ def test_successful_semgrep_run_collects_json_and_cleans_workspace(tmp_path: Pat
     provenance = run.summary["provenance"]
     assert provenance["selected_language"] == "PYTHON"
     assert provenance["detected_languages"] == ["PYTHON"]
+    assert provenance["scanned_languages"] == ["PYTHON"]
+    assert provenance["scan_mode"] == "SINGLE"
+    assert provenance["source_metadata"] == {
+        "source_version": "source-2.0.0",
+        "deployment_version": "deploy-42",
+        "description": "분석 실행 시점 설명",
+    }
     assert len(provenance["source_sha256"]) == 64
     assert len(provenance["ruleset_sha256"]) == 64
     assert len(provenance["active_rules_sha256"]) == 64
@@ -152,6 +165,7 @@ def test_successful_semgrep_run_collects_json_and_cleans_workspace(tmp_path: Pat
             "kisa_standard_id",
             "rule_name",
             "severity",
+            "language",
             "semgrep_rule_id",
         }
         for rule in provenance["active_rules"]
@@ -169,6 +183,84 @@ def test_real_semgrep_process_completes_with_local_configuration(tmp_path: Path,
         "error_count": 0,
         "stored_finding_count": 0,
     }
+
+
+def test_multi_language_mode_uses_one_semgrep_process_with_all_extensions(
+    tmp_path: Path, monkeypatch
+) -> None:
+    settings = _settings(tmp_path)
+    application = create_app(settings)
+    commands: list[list[str]] = []
+
+    def fake_run(command, **kwargs):
+        commands.append(command)
+        return subprocess.CompletedProcess(command, 0, '{"results": [], "errors": []}', "")
+
+    monkeypatch.setattr(analysis_service, "_run_semgrep_process", fake_run)
+
+    async def exercise() -> int:
+        async with application.router.lifespan_context(application):
+            with Session(application.state.db_engine) as session:
+                admin = session.scalar(
+                    select(User).where(User.username == "admin@company.com")
+                )
+                assert admin is not None
+                admin_id = admin.id
+            with Session(application.state.db_engine) as session:
+                project = create_project(
+                    session,
+                    name="Mixed target",
+                    description=None,
+                    language=Language.PYTHON,
+                    scan_all_languages=True,
+                    created_by=admin_id,
+                )
+                project_id = project.id
+
+            source_root = (
+                settings.upload_dir
+                / "projects"
+                / str(project_id)
+                / "sources"
+                / "mixed"
+                / "extracted"
+            )
+            source_root.mkdir(parents=True)
+            (source_root / "sample.py").write_text("print('safe')", encoding="utf-8")
+            (source_root / "Sample.java").write_text("class Sample {}", encoding="utf-8")
+            (source_root / "sample.js").write_text("const safe = true;", encoding="utf-8")
+            with Session(application.state.db_engine) as session:
+                update_project_source(
+                    session, project_id=project_id, source_path=source_root
+                )
+                run = execute_project_analysis(
+                    session,
+                    project_id=project_id,
+                    executed_by=admin_id,
+                    settings=settings,
+                )
+                return run.id
+
+    run_id = asyncio.run(exercise())
+    assert len(commands) == 1
+    command = commands[0]
+    include_values = {
+        command[index + 1]
+        for index, value in enumerate(command[:-1])
+        if value == "--include"
+    }
+    assert include_values == {"*.java", "*.js", "*.jsx", "*.mjs", "*.cjs", "*.py"}
+
+    with Session(application.state.db_engine) as session:
+        run = session.get(AnalysisRun, run_id)
+        assert run is not None and run.summary is not None
+        assert run.summary["provenance"]["scan_mode"] == "MULTI"
+        assert run.summary["provenance"]["scanned_languages"] == [
+            "JAVA",
+            "JAVASCRIPT",
+            "PYTHON",
+        ]
+        assert len(run.summary["provenance"]["active_rules"]) == 29
 
 
 def test_active_rule_snapshot_hash_changes_when_a_rule_is_disabled(

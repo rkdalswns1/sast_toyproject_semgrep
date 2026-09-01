@@ -8,7 +8,7 @@
 
 ### projects
 
-`id` PK, `name` NOT NULL, `description`, `source_type` NOT NULL, `language` NOT NULL, `source_path` NOT NULL, `created_by` FK users.id, `created_at`, `updated_at`.
+`id` PK, `name` NOT NULL, `description`, `source_type` NOT NULL, `language` NOT NULL, `scan_all_languages` NOT NULL, `source_path` NOT NULL, `source_version`, `deployment_version`, `source_description`, `created_by` FK users.id, `created_at`, `updated_at`. `language`은 기준 언어이며 `scan_all_languages=true`이면 ZIP에서 감지된 모든 지원 언어를 함께 분석한다. 세 소스 메타데이터 컬럼은 현재 프로젝트가 가리키는 최신 ZIP을 설명한다.
 
 ### project_users
 
@@ -30,6 +30,10 @@
 
 `id` PK, `analysis_run_id` FK analysis_runs.id, `rule_id` FK rules.id, `rule_name`, `kisa_id`, `language`, `severity`, `confidence`, `file_path`, `start_line`, `start_column`, `end_line`, `end_column`, `message`, `evidence`, `recommendation`, `raw_result`.
 
+### finding_workflows
+
+`finding_id` PK/FK findings.id, `status`, `note`, `updated_by` FK users.id, `updated_at`. Finding과 1:1 관계이며 최신 조치 상태를 저장한다. 기본 상태는 `OPEN`이고 최초 탐지 시 변경자와 변경 시각은 비어 있다.
+
 ### diagnostic_rules
 
 `id` PK, `catalog_rule_id` FK rules.id, `language`, `semgrep_rule_id` UNIQUE, `is_active`, `created_at`, `updated_at`.
@@ -49,12 +53,16 @@ KISA 카탈로그 항목과 언어별 Semgrep Rule ID를 분리한다. 하나의
 - AnalysisRun 1:N Finding
 - Rule 1:N Finding
 - Rule 1:N DiagnosticRule
+- Finding 1:1 FindingWorkflow
+- User 1:N FindingWorkflow through updated_by
 
 ## Integrity Rules
 
 SQLite 연결마다 `PRAGMA foreign_keys=ON`을 적용한다.
 
 Finding은 반드시 하나의 AnalysisRun과 Rule에 연결된다.
+
+혼합 언어 AnalysisRun에서도 Finding의 `language`는 매칭된 활성 DiagnosticRule의 실제 언어와 일치해야 한다. AnalysisRun의 기준 언어를 모든 Finding에 복사하지 않는다.
 
 Rule의 `standard_id`는 고유하며 `item_number`는 1 이상의 공식 항목 번호를 저장한다. 비활성 Rule은 기존 Finding 관계를 유지하며 물리 삭제하지 않는다.
 
@@ -70,6 +78,9 @@ DiagnosticRule은 카탈로그의 공식 ID·명칭을 복제하지 않는다. �
 - 버전 5는 기존 Finding의 `raw_result.path`를 이미 정규화된 `file_path`와 동일한 소스 상대경로로 변경한다. 나머지 Semgrep 원본 필드는 유지한다.
 - 버전 6은 `users.role` 제약을 `SUPER_ADMIN`, `PROJECT_MANAGER`, `USER`로 교체하고 기존 `ADMIN`을 `SUPER_ADMIN`으로 변환하며 `must_change_password` 컬럼을 추가한다. 기존 사용자 관계와 식별자·해시·활성 상태·시각은 보존한다.
 - 버전 7은 기존 DB의 인증서 유효성 검증과 신뢰할 수 없는 데이터의 역직렬화 카탈로그 행을 `PARTIAL`로 전환하고 지원 언어·대표 Semgrep Rule ID·기본 심각도를 동기화한다. 관리자가 변경한 활성 상태는 보존한다.
+- 버전 8은 `projects.scan_all_languages`를 추가한다. 기존 프로젝트는 기존 동작을 보존하기 위해 `false`로 이전하며 신규 프로젝트는 화면에서 통합 분석을 선택할 수 있다.
+- 버전 9는 `finding_workflows` 테이블을 생성하고 기존 Finding에 기본 `OPEN` 상태를 추가한다. 기존 분석 결과와 Rule 관계는 변경하지 않는다.
+- 버전 10은 `projects`에 nullable `source_version`, `deployment_version`, `source_description`을 추가한다. 기존 프로젝트와 분석 실행은 값이 없는 상태로 유지한다.
 
 ## Deletion Policy
 
@@ -80,4 +91,5 @@ DiagnosticRule은 카탈로그의 공식 ID·명칭을 복제하지 않는다. �
 - ProjectUser는 연결된 Project가 삭제되면 함께 삭제한다.
 - 사용 중인 Rule은 삭제할 수 없다.
 - Finding이 참조하는 Rule에는 `RESTRICT` 정책을 사용한다.
+- Finding 삭제 시 FindingWorkflow를 함께 삭제하고, 상태 변경자를 참조 중인 User 삭제는 제한한다.
 - `projects.created_by`와 `analysis_runs.executed_by`의 기록 보존을 위해 참조 중인 User의 물리 삭제를 제한한다.

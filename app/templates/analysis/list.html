@@ -11,9 +11,9 @@
   <section class="card">
     {% if analysis_runs %}
     <table>
-      <thead><tr><th>실행 ID</th><th>엔진</th><th>상태</th><th>시작 일시</th><th></th></tr></thead>
+      <thead><tr><th>실행 ID</th><th>소스/배포 버전</th><th>엔진</th><th>실행 계정</th><th>상태</th><th>시작 일시</th><th></th></tr></thead>
       <tbody>{% for run in analysis_runs %}<tr>
-        <td>#{{ run.id }}</td><td>{{ run.engine }}</td><td>{{ run.status.value }}</td>
+        <td>#{{ run.id }}</td><td>{% if run.summary and run.summary.provenance and run.summary.provenance.source_metadata %}{{ run.summary.provenance.source_metadata.source_version or '-' }} / {{ run.summary.provenance.source_metadata.deployment_version or '-' }}{% else %}- / -{% endif %}</td><td>{{ run.engine }}</td><td>{{ run.executor.username }}</td><td>{{ run.status.value }}</td>
         <td>{{ run.started_at.strftime('%Y-%m-%d %H:%M:%S') if run.started_at else '-' }}</td>
         <td><a href="/analysis/{{ run.id }}">상세</a></td>
       </tr>{% endfor %}</tbody>

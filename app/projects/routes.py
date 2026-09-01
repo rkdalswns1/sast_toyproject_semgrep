@@ -125,6 +125,7 @@ async def create_project_page(
     name: Annotated[str, Form()],
     description: Annotated[str, Form()] = "",
     language: Annotated[str, Form()] = "",
+    scan_all_languages: Annotated[str | None, Form()] = None,
     submitted_csrf_token: Annotated[str, Form(alias="csrf_token")] = "",
     session: Session = Depends(get_db),
 ) -> Response:
@@ -140,6 +141,7 @@ async def create_project_page(
             name=name,
             description=description,
             language=_parse_language(language),
+            scan_all_languages=scan_all_languages == "true",
             created_by=creator_id,
         )
     except ProjectManagementError as exc:
@@ -151,7 +153,12 @@ async def create_project_page(
                 "project": None,
                 "error": str(exc),
                 "current_user": admin,
-                "submitted": {"name": name, "description": description, "language": language},
+                "submitted": {
+                    "name": name,
+                    "description": description,
+                    "language": language,
+                    "scan_all_languages": scan_all_languages == "true",
+                },
                 "language_profiles": LANGUAGE_PROFILES,
             },
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -210,6 +217,7 @@ async def edit_project(
     name: Annotated[str, Form()],
     description: Annotated[str, Form()] = "",
     language: Annotated[str, Form()] = "",
+    scan_all_languages: Annotated[str | None, Form()] = None,
     submitted_csrf_token: Annotated[str, Form(alias="csrf_token")] = "",
     session: Session = Depends(get_db),
 ) -> Response:
@@ -228,6 +236,7 @@ async def edit_project(
             name=name,
             description=description,
             language=_parse_language(language),
+            scan_all_languages=scan_all_languages == "true",
         )
     except ProjectManagementError as exc:
         project = session.get(Project, project_id)
@@ -239,6 +248,12 @@ async def edit_project(
                 "project": project,
                 "error": str(exc),
                 "current_user": user,
+                "submitted": {
+                    "name": name,
+                    "description": description,
+                    "language": language,
+                    "scan_all_languages": scan_all_languages == "true",
+                },
                 "language_profiles": LANGUAGE_PROFILES,
             },
             status_code=status.HTTP_400_BAD_REQUEST,

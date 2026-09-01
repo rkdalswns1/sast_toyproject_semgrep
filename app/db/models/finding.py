@@ -13,6 +13,7 @@ from app.db.models.types import persisted_enum
 
 if TYPE_CHECKING:
     from app.db.models.analysis_run import AnalysisRun
+    from app.db.models.finding_workflow import FindingWorkflow
     from app.db.models.rule import Rule
 
 
@@ -53,4 +54,9 @@ class Finding(Base):
 
     analysis_run: Mapped[AnalysisRun] = relationship(back_populates="findings")
     rule: Mapped[Rule] = relationship(back_populates="findings")
-
+    workflow: Mapped[FindingWorkflow] = relationship(
+        back_populates="finding",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+        uselist=False,
+    )

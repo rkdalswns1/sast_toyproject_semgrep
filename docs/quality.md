@@ -51,9 +51,12 @@ Semgrep 규칙은 `app/rules/semgrep/kisa-2021/` 아래에 KISA 진단 항목별
 ## Consistency Invariants
 
 - AnalysisRun은 유효한 Project와 실행자에 연결되며 실행 시작 시 Project 언어를 스냅샷으로 저장한다.
-- Finding 언어는 부모 AnalysisRun에서만 파생하며 호출자가 별도 값으로 지정하지 않는다.
-- Finding은 부모 AnalysisRun 언어를 지원하는 활성 Rule에만 연결한다.
+- 단일 언어와 통합 분석 모두 Finding 언어는 Semgrep Rule ID와 일치하는 활성 DiagnosticRule에서 파생하며 호출자가 임의 값으로 지정하지 않는다.
+- Finding은 실제 분석 언어에 해당하고 카탈로그 Rule이 지원하는 활성 DiagnosticRule에만 연결한다.
 - Finding의 Rule 이름, 기준 ID, 언어, 심각도와 신뢰도는 분석 시점 스냅샷으로 보존한다.
+- FindingWorkflow는 Finding과 1:1이며 탐지 원본을 수정하지 않고 후속 조치 상태만 분리해 저장한다.
+- Project의 소스 메타데이터는 최신 ZIP을 나타내고 AnalysisRun provenance에는 실행 시점 값을 복사하여 이후 업로드와 독립적으로 보존한다.
+- CSV와 PDF는 같은 불변 보고서 스냅샷을 사용하여 필드와 집계가 형식별로 달라지지 않게 한다. 보고서 생성은 분석 원본과 DB 상태를 변경하지 않는다.
 - Project 삭제 시 하위 AnalysisRun과 Finding은 함께 삭제하고, 참조 중인 사용자와 Rule 삭제는 FK 정책으로 제한한다.
 - SQLite 연결마다 FK 검사를 활성화하며 저장 트랜잭션이 실패하면 전체 변경을 rollback한다.
 

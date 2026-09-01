@@ -16,20 +16,21 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.config import Settings
 from app.analysis.languages import (
+    LANGUAGE_PROFILES,
     LanguageDetectionError,
-    language_profile,
-    require_selected_language,
+    resolve_analysis_languages,
 )
 from app.db.models.analysis_run import AnalysisRun
 from app.db.models.diagnostic_rule import DiagnosticRule
-from app.db.models.enums import AnalysisStatus
+from app.db.models.enums import AnalysisStatus, Language
 from app.db.models.project import Project
 from app.db.models.rule import Rule
+from app.db.models.finding import Finding
 from app.findings.services import FindingNormalizationError, persist_normalized_findings
 
 
@@ -113,9 +114,12 @@ def _semgrep_environment(workspace: Path) -> dict[str, str]:
 
 
 def _semgrep_scan_arguments(
-    *, config_path: Path, source_path: Path, settings: Settings, project_language
+    *,
+    config_path: Path,
+    source_path: Path,
+    settings: Settings,
+    scan_languages: set[Language],
 ) -> list[str]:
-    profile = language_profile(project_language)
     arguments = [
         "scan",
         "--config",
@@ -133,8 +137,11 @@ def _semgrep_scan_arguments(
         "--max-target-bytes",
         str(settings.semgrep_max_target_bytes),
     ]
-    for extension in profile.extensions:
-        arguments.extend(["--include", f"*{extension}"])
+    for profile in LANGUAGE_PROFILES:
+        if profile.language not in scan_languages:
+            continue
+        for extension in profile.extensions:
+            arguments.extend(["--include", f"*{extension}"])
     arguments.append(str(source_path))
     return arguments
 
@@ -179,20 +186,25 @@ def _sha256_source_tree(source_root: Path) -> str:
     return digest.hexdigest()
 
 
-def _active_rule_snapshot(session: Session, project_language) -> list[dict[str, str]]:
+def _active_rule_snapshot(
+    session: Session, scan_languages: Language | set[Language]
+) -> list[dict[str, str]]:
     """Return the effective catalog-to-Semgrep mappings for this run."""
+    if isinstance(scan_languages, Language):
+        scan_languages = {scan_languages}
     rows = session.execute(
         select(
             Rule.standard_id,
             Rule.name,
             Rule.severity,
+            DiagnosticRule.language,
             DiagnosticRule.semgrep_rule_id,
         )
         .join(DiagnosticRule, DiagnosticRule.catalog_rule_id == Rule.id)
         .where(
             Rule.is_active.is_(True),
             DiagnosticRule.is_active.is_(True),
-            DiagnosticRule.language == project_language,
+            DiagnosticRule.language.in_(scan_languages),
         )
         .order_by(Rule.standard_id, DiagnosticRule.semgrep_rule_id)
     ).all()
@@ -201,9 +213,10 @@ def _active_rule_snapshot(session: Session, project_language) -> list[dict[str, 
             "kisa_standard_id": standard_id,
             "rule_name": rule_name,
             "severity": severity.value,
+            "language": language.value,
             "semgrep_rule_id": semgrep_rule_id,
         }
-        for standard_id, rule_name, severity, semgrep_rule_id in rows
+        for standard_id, rule_name, severity, language, semgrep_rule_id in rows
     ]
 
 
@@ -219,11 +232,12 @@ def _analysis_provenance(
     project_language,
     settings: Settings,
     active_rules: list[dict[str, str]],
+    *,
+    detected_languages: set[Language],
+    scan_languages: set[Language],
+    scan_all_languages: bool,
+    source_metadata: dict[str, str | None],
 ) -> dict[str, Any]:
-    try:
-        detected_languages = require_selected_language(source_path, project_language)
-    except LanguageDetectionError as exc:
-        raise AnalysisExecutionError(str(exc)) from exc
     try:
         source_snapshot = source_path.resolve().relative_to(
             settings.upload_dir.resolve()
@@ -243,6 +257,9 @@ def _analysis_provenance(
         "active_rules_sha256": _active_rule_snapshot_sha256(active_rules),
         "selected_language": project_language.value,
         "detected_languages": sorted(language.value for language in detected_languages),
+        "scanned_languages": sorted(language.value for language in scan_languages),
+        "scan_mode": "MULTI" if scan_all_languages else "SINGLE",
+        "source_metadata": dict(source_metadata),
     }
 
 
@@ -326,7 +343,10 @@ def _run_semgrep_process(
 
 
 def _execute_semgrep(
-    source_path: Path, workspace: Path, settings: Settings, project_language
+    source_path: Path,
+    workspace: Path,
+    settings: Settings,
+    scan_languages: set[Language],
 ) -> dict[str, Any]:
     """Run Semgrep without a shell and return its JSON object."""
     command = [_semgrep_command()]
@@ -335,7 +355,7 @@ def _execute_semgrep(
             config_path=_ruleset_path(),
             source_path=source_path,
             settings=settings,
-            project_language=project_language,
+            scan_languages=scan_languages,
         )
     )
     environment = _semgrep_environment(workspace)
@@ -387,7 +407,12 @@ def execute_project_analysis(
     # each explicit write transaction that records the lifecycle.
     stored_project_id = project.id
     project_language = project.language
-    active_rules = _active_rule_snapshot(session, project_language)
+    scan_all_languages = project.scan_all_languages
+    source_metadata = {
+        "source_version": project.source_version,
+        "deployment_version": project.deployment_version,
+        "description": project.source_description,
+    }
     session.rollback()
 
     with session.begin():
@@ -412,8 +437,25 @@ def execute_project_analysis(
     error_message: str | None = None
     provenance: dict[str, Any] | None = None
     try:
+        try:
+            detected_languages, scan_languages = resolve_analysis_languages(
+                source_path,
+                project_language,
+                scan_all_languages=scan_all_languages,
+            )
+        except LanguageDetectionError as exc:
+            raise AnalysisExecutionError(str(exc)) from exc
+        active_rules = _active_rule_snapshot(session, scan_languages)
+        session.rollback()
         provenance = _analysis_provenance(
-            source_path, project_language, settings, active_rules
+            source_path,
+            project_language,
+            settings,
+            active_rules,
+            detected_languages=detected_languages,
+            scan_languages=scan_languages,
+            scan_all_languages=scan_all_languages,
+            source_metadata=source_metadata,
         )
         workspace_root = settings.upload_dir / ".analysis-workspaces"
         workspace_root.mkdir(parents=True, exist_ok=True)
@@ -426,7 +468,7 @@ def execute_project_analysis(
             isolated_source,
             workspace,
             settings,
-            project_language,
+            scan_languages,
         )
         summary = _result_summary(semgrep_result)
         with session.begin():
@@ -437,13 +479,24 @@ def execute_project_analysis(
                 analysis_run_id=analysis_run.id,
                 semgrep_result=semgrep_result,
                 source_root=isolated_source,
+                scan_languages=scan_languages,
             )
+            session.flush()
+            language_counts = session.execute(
+                select(Finding.language, func.count(Finding.id))
+                .where(Finding.analysis_run_id == analysis_run.id)
+                .group_by(Finding.language)
+                .order_by(Finding.language)
+            ).all()
             analysis_run.status = AnalysisStatus.COMPLETED
             analysis_run.finished_at = _utcnow()
             analysis_run.error_message = None
             analysis_run.summary = {
                 **summary,
                 "stored_finding_count": stored_count,
+                "stored_finding_count_by_language": {
+                    language.value: count for language, count in language_counts
+                },
                 "provenance": provenance,
             }
     except (AnalysisExecutionError, FindingNormalizationError) as exc:

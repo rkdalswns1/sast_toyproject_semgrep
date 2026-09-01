@@ -94,6 +94,7 @@ def test_project_crud_membership_and_access_control(tmp_path: Path) -> None:
                         "name": "Gateway",
                         "description": "Security gateway",
                         "language": "PYTHON",
+                        "scan_all_languages": "true",
                         "csrf_token": token,
                     },
                 )
@@ -139,6 +140,7 @@ def test_project_crud_membership_and_access_control(tmp_path: Path) -> None:
                         "name": "Gateway v2",
                         "description": "Updated description",
                         "language": "JAVA",
+                        "scan_all_languages": "true",
                         "csrf_token": token,
                     },
                 )
@@ -174,6 +176,7 @@ def test_project_crud_membership_and_access_control(tmp_path: Path) -> None:
                             "name": "Gateway managed",
                             "description": "Managed by project manager",
                             "language": "JAVA",
+                            "scan_all_languages": "true",
                             "csrf_token": user_token,
                         },
                     )
@@ -191,6 +194,7 @@ def test_project_crud_membership_and_access_control(tmp_path: Path) -> None:
         assert project is not None
         assert project.description == "Managed by project manager"
         assert project.language.value == "JAVA"
+        assert project.scan_all_languages is True
         member = session.scalar(
             select(User).where(User.username == "member@company.com")
         )

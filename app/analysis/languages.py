@@ -73,3 +73,24 @@ def require_selected_language(
             f"선택한 {profile.label} 소스 파일({extensions})을 ZIP에서 찾을 수 없습니다."
         )
     return detected
+
+
+def resolve_analysis_languages(
+    source_root: Path, selected_language: Language, *, scan_all_languages: bool
+) -> tuple[set[Language], set[Language]]:
+    """Return detected and effective scan languages for one project run."""
+    detected = detect_source_languages(source_root)
+    if scan_all_languages:
+        if not detected:
+            raise LanguageDetectionError(
+                "ZIP에서 지원하는 Java, JavaScript 또는 Python 소스 파일을 찾을 수 없습니다."
+            )
+        return detected, detected
+
+    if selected_language not in detected:
+        profile = language_profile(selected_language)
+        extensions = ", ".join(profile.extensions)
+        raise LanguageDetectionError(
+            f"선택한 {profile.label} 소스 파일({extensions})을 ZIP에서 찾을 수 없습니다."
+        )
+    return detected, {selected_language}

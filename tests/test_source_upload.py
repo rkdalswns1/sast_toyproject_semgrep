@@ -117,7 +117,12 @@ def test_safe_zip_upload_persists_isolated_source_workspace(tmp_path: Path) -> N
                 detail = await client.get(f"/projects/{project_id}")
                 response = await client.post(
                     f"/projects/{project_id}/analysis",
-                    data={"csrf_token": _csrf_token(detail.text)},
+                    data={
+                        "source_version": "  source-1.4.0  ",
+                        "deployment_version": " release-2026.09 ",
+                        "source_description": "  고객 포털 배포 후보 소스  ",
+                        "csrf_token": _csrf_token(detail.text),
+                    },
                     files={
                         "source_file": (
                             "sample.zip",
@@ -127,6 +132,29 @@ def test_safe_zip_upload_persists_isolated_source_workspace(tmp_path: Path) -> N
                     },
                 )
                 assert response.status_code == 303
+                stored_detail = await client.get(f"/projects/{project_id}")
+                assert "source-1.4.0" in stored_detail.text
+                assert "release-2026.09" in stored_detail.text
+                assert "고객 포털 배포 후보 소스" in stored_detail.text
+
+                invalid_metadata = await client.post(
+                    f"/projects/{project_id}/analysis",
+                    data={
+                        "source_version": "x" * 101,
+                        "deployment_version": "must-not-replace",
+                        "source_description": "must-not-replace",
+                        "csrf_token": _csrf_token(stored_detail.text),
+                    },
+                    files={
+                        "source_file": (
+                            "replacement.zip",
+                            _zip_bytes({"replacement.py": "print('replacement')"}),
+                            "application/zip",
+                        )
+                    },
+                )
+                assert invalid_metadata.status_code == 400
+                assert "소스 버전은 100자 이하여야 합니다." in invalid_metadata.text
                 return project_id
 
     project_id = asyncio.run(exercise())
@@ -135,10 +163,14 @@ def test_safe_zip_upload_persists_isolated_source_workspace(tmp_path: Path) -> N
         project = session.get(Project, project_id)
         assert project is not None
         extracted_path = Path(project.source_path)
+        assert project.source_version == "source-1.4.0"
+        assert project.deployment_version == "release-2026.09"
+        assert project.source_description == "고객 포털 배포 후보 소스"
     assert extracted_path.is_dir()
     assert extracted_path.parent.parent.parent == settings.upload_dir / "projects" / str(project_id)
     assert (extracted_path / "src" / "app.py").read_text() == "print('safe')"
     assert (extracted_path.parent / "source.zip").is_file()
+    assert not (extracted_path / "replacement.py").exists()
 
 
 def test_zip_slip_and_symlink_uploads_are_rejected_without_persistence(tmp_path: Path) -> None:

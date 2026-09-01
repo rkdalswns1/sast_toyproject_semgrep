@@ -194,6 +194,69 @@ def _sync_phase11_builtin_rule_metadata(connection: Connection) -> None:
         )
 
 
+def _add_multi_language_project_mode(connection: Connection) -> None:
+    """Add an opt-in scan mode while preserving existing project behavior."""
+    columns = {
+        column["name"] for column in inspect(connection).get_columns("projects")
+    }
+    if "scan_all_languages" not in columns:
+        connection.execute(
+            text(
+                "ALTER TABLE projects ADD COLUMN "
+                "scan_all_languages BOOLEAN NOT NULL DEFAULT 0"
+            )
+        )
+
+
+def _add_finding_workflows(connection: Connection) -> None:
+    """Create and backfill the latest Finding remediation state."""
+    connection.execute(
+        text(
+            "CREATE TABLE IF NOT EXISTS finding_workflows ("
+            "finding_id INTEGER NOT NULL PRIMARY KEY, "
+            "status VARCHAR(20) NOT NULL DEFAULT 'OPEN', "
+            "note TEXT, updated_by INTEGER, updated_at DATETIME, "
+            "CONSTRAINT finding_status CHECK (status IN ("
+            "'OPEN', 'IN_PROGRESS', 'RESOLVED', 'FALSE_POSITIVE', 'ACCEPTED_RISK'"
+            ")), "
+            "FOREIGN KEY(finding_id) REFERENCES findings(id) ON DELETE CASCADE, "
+            "FOREIGN KEY(updated_by) REFERENCES users(id) ON DELETE RESTRICT"
+            ")"
+        )
+    )
+    connection.execute(
+        text(
+            "CREATE INDEX IF NOT EXISTS ix_finding_workflows_updated_by "
+            "ON finding_workflows (updated_by)"
+        )
+    )
+    connection.execute(
+        text(
+            "INSERT OR IGNORE INTO finding_workflows (finding_id, status) "
+            "SELECT id, 'OPEN' FROM findings"
+        )
+    )
+
+
+def _add_project_source_metadata(connection: Connection) -> None:
+    """Add optional metadata for the latest uploaded project source."""
+    columns = {
+        column["name"] for column in inspect(connection).get_columns("projects")
+    }
+    if "source_version" not in columns:
+        connection.execute(
+            text("ALTER TABLE projects ADD COLUMN source_version VARCHAR(100)")
+        )
+    if "deployment_version" not in columns:
+        connection.execute(
+            text("ALTER TABLE projects ADD COLUMN deployment_version VARCHAR(100)")
+        )
+    if "source_description" not in columns:
+        connection.execute(
+            text("ALTER TABLE projects ADD COLUMN source_description TEXT")
+        )
+
+
 SCHEMA_MIGRATIONS: tuple[SchemaMigration, ...] = (
     SchemaMigration(1, "Initial SAST domain schema baseline", _record_initial_schema),
     SchemaMigration(
@@ -226,6 +289,21 @@ SCHEMA_MIGRATIONS: tuple[SchemaMigration, ...] = (
         7,
         "Enable approved certificate validation and deserialization rules",
         _sync_phase11_builtin_rule_metadata,
+    ),
+    SchemaMigration(
+        8,
+        "Add opt-in multi-language project analysis mode",
+        _add_multi_language_project_mode,
+    ),
+    SchemaMigration(
+        9,
+        "Add and backfill Finding remediation workflows",
+        _add_finding_workflows,
+    ),
+    SchemaMigration(
+        10,
+        "Add optional ZIP source metadata to projects",
+        _add_project_source_metadata,
     ),
 )
 

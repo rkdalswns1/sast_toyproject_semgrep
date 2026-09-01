@@ -66,6 +66,7 @@ AnalysisStatus: PENDING, RUNNING, COMPLETED, FAILED
 ImplementationStatus: IMPLEMENTED, PARTIAL, NOT_IMPLEMENTED
 Severity: INFO, LOW, MEDIUM, HIGH, CRITICAL
 Confidence: LOW, MEDIUM, HIGH
+FindingStatus: OPEN, IN_PROGRESS, RESOLVED, FALSE_POSITIVE, ACCEPTED_RISK
 Language: JAVA, JAVASCRIPT, PYTHON
 SourceType: ZIP
 ```
@@ -75,6 +76,12 @@ Python에서는 `str, Enum`을 상속한 Enum으로 정의한다. SQLAlchemy 모
 `rules.supported_languages`는 JSON 배열로 저장하되, 배열의 각 값은 `Language` Enum 값만 허용한다. SQLAlchemy의 변경 추적을 적용해 배열 항목 추가·삭제도 저장된다.
 
 `diagnostic_rules.language`도 `Language` Enum 값을 사용한다. 같은 KISA 카탈로그 항목에는 언어별 Semgrep Rule ID를 하나씩만 연결하고, Semgrep Rule ID는 전체에서 중복될 수 없다.
+
+`projects.language`와 `analysis_runs.language`는 기존 호환성과 대표 언어 표시를 위해 기준 언어 하나를 저장한다. `projects.scan_all_languages=true`이면 분석 시 ZIP에서 감지된 모든 `Language` 값을 대상으로 하며, 실제 분석 언어 목록은 AnalysisRun 요약의 `provenance.scanned_languages`에 저장한다. Finding에는 `MULTI` 같은 합성 값을 사용하지 않고 실제 매칭된 `diagnostic_rules.language`만 저장한다.
+
+Finding 조치 상태의 기본값은 `OPEN`이다. `FALSE_POSITIVE`와 `ACCEPTED_RISK`는 변경 의견을 필수로 하며 의견은 앞뒤 공백을 제거해 최대 2,000자로 저장한다.
+
+ZIP 소스 메타데이터는 모두 선택 입력이다. `source_version`과 `deployment_version`은 앞뒤 공백을 제거해 각각 최대 100자, `source_description`은 최대 2,000자로 저장한다. 공백만 입력한 값은 `NULL`로 처리한다.
 
 ## Bootstrap Super Administrator
 

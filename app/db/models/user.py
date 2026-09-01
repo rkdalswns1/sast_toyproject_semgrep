@@ -14,6 +14,7 @@ from app.db.models.types import persisted_enum
 
 if TYPE_CHECKING:
     from app.db.models.analysis_run import AnalysisRun
+    from app.db.models.finding_workflow import FindingWorkflow
     from app.db.models.project import Project, ProjectUser
 
 
@@ -44,4 +45,7 @@ class User(TimestampMixin, Base):
     )
     projects: Mapped[list[Project]] = relationship(
         secondary="project_users", back_populates="users", viewonly=True
+    )
+    finding_workflow_updates: Mapped[list[FindingWorkflow]] = relationship(
+        back_populates="updater", foreign_keys="FindingWorkflow.updated_by"
     )

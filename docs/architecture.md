@@ -49,6 +49,8 @@ ZIP upload → safe extraction → registered-language detection → Semgrep
 
 분석 엔진과 결과 저장 사이에는 정규화 계층을 둔다. Semgrep 원본 결과는 `raw_result`로 보존한다.
 
+CSV와 PDF 보고서는 AnalysisRun, Project, Finding, FindingWorkflow를 읽어 공통 보고서 스냅샷으로 변환한 뒤 요청 시 메모리에서 생성한다. 보고서 생성은 DB를 변경하지 않으며 원본 Semgrep JSON과 시스템 경로를 출력 계층에 전달하지 않는다.
+
 분석은 MVP에서 HTTP 요청 안에서 동기 실행한다. 분석 요청을 받으면 AnalysisRun을 `RUNNING` 상태로 변경하고 Semgrep을 실행한다. 성공하면 `COMPLETED`, 오류 또는 시간초과가 발생하면 `FAILED`로 변경한다.
 
 Semgrep 실행 제한 시간은 기본 60초이며 환경변수로 조정할 수 있다. 동시 작업 수, 규칙별 메모리, 대상 파일 크기와 JSON 출력 크기도 제한한다. 실행 프로세스는 별도 프로세스 그룹에서 시작하고 timeout 또는 출력 제한 초과 시 그룹 전체를 종료한다.
@@ -57,7 +59,9 @@ Semgrep 실행 제한 시간은 기본 60초이며 환경변수로 조정할 수
 
 Semgrep 자식 프로세스는 애플리케이션 환경 전체를 상속하지 않으며 HOME, 임시 및 캐시 위치를 분석별 작업공간으로 제한한다.
 
-지원 언어의 표시명, 확장자 및 Semgrep 언어명은 중앙 language registry에서 관리한다. 프로젝트 폼과 분석 전 언어 식별은 같은 registry를 참조한다. 새 언어는 공통 분석 흐름이나 Finding 모델을 복제하지 않고 registry와 해당 Semgrep 규칙을 추가하여 확장한다. Finding 언어는 부모 AnalysisRun에서 파생하고 해당 언어를 지원하는 Rule만 연결한다.
+지원 언어의 표시명, 확장자 및 Semgrep 언어명은 중앙 language registry에서 관리한다. 프로젝트 폼과 분석 전 언어 식별은 같은 registry를 참조한다. 프로젝트는 기준 언어와 `scan_all_languages` 설정을 저장한다. 단일 언어 모드는 기준 언어만 분석하고, 통합 분석 모드는 ZIP에서 감지된 모든 지원 언어를 하나의 Semgrep 프로세스로 분석한다. 새 언어는 공통 분석 흐름이나 Finding 모델을 복제하지 않고 registry와 해당 Semgrep 규칙을 추가하여 확장한다.
+
+Semgrep의 `--jobs`가 하나의 실행 내부에서 대상 파일을 병렬 처리한다. 언어별 Semgrep 프로세스를 별도로 실행하지 않으므로 실행 상태, timeout, 출력 제한과 JSON 결과는 한 AnalysisRun에서 원자적으로 관리한다. 혼합 분석의 Finding 언어는 매칭된 활성 DiagnosticRule의 언어에서 결정하며, 부모 AnalysisRun의 `language`는 프로젝트 기준 언어를 보존한다.
 
 각 AnalysisRun의 `summary.provenance`에는 다음 재현성 정보를 기록한다.
 
@@ -67,6 +71,8 @@ Semgrep 자식 프로세스는 애플리케이션 환경 전체를 상속하지 
 - 로컬 규칙 세트 SHA-256
 - 분석 시점에 활성화된 언어별 Rule ID·KISA ID·명칭·심각도 목록과 해당 목록의 SHA-256
 - 식별된 소스 언어
+- 실제 분석한 언어와 단일·통합 분석 모드
+- 분석 실행 시점의 소스 버전·배포 버전·설명
 
 ## Database Initialization
 

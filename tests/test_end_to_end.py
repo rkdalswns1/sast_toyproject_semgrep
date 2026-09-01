@@ -12,8 +12,9 @@ from sqlalchemy.orm import Session
 
 from app.config import Settings
 from app.db.models.analysis_run import AnalysisRun
-from app.db.models.enums import AnalysisStatus, Language
+from app.db.models.enums import AnalysisStatus, FindingStatus, Language
 from app.db.models.finding import Finding
+from app.db.models.finding_workflow import FindingWorkflow
 from app.db.models.user import User
 from app.main import create_app
 
@@ -105,15 +106,20 @@ def test_authenticated_upload_analysis_findings_and_access_boundaries(tmp_path: 
                 assert create_project_response.status_code == 303
                 project_id = int(create_project_response.headers["location"].rsplit("/", 1)[1])
 
-                for username in ("member@company.com", "outsider@company.com"):
+                test_users = (
+                    ("member@company.com", "member-password", "PROJECT_MANAGER"),
+                    ("viewer@company.com", "viewer-password", "USER"),
+                    ("outsider@company.com", "outsider-password", "USER"),
+                )
+                for username, initial_password, role in test_users:
                     user_form = await admin_client.get("/users/new")
                     response = await admin_client.post(
                         "/users",
                         data={
                             "username": username,
-                            "password": "member-password" if username.startswith("member") else "outsider-password",
-                            "password_confirmation": "member-password" if username.startswith("member") else "outsider-password",
-                            "role": "PROJECT_MANAGER" if username.startswith("member") else "USER",
+                            "password": initial_password,
+                            "password_confirmation": initial_password,
+                            "role": role,
                             "is_active": "true",
                             "csrf_token": _csrf_token(user_form.text),
                         },
@@ -124,14 +130,18 @@ def test_authenticated_upload_analysis_findings_and_access_boundaries(tmp_path: 
                     member = session.scalar(
                         select(User).where(User.username == "member@company.com")
                     )
-                    assert member is not None
+                    viewer = session.scalar(
+                        select(User).where(User.username == "viewer@company.com")
+                    )
+                    assert member is not None and viewer is not None
                     member_id = member.id
+                    viewer_id = viewer.id
 
                 assignment_page = await admin_client.get(f"/projects/{project_id}/users")
                 assignment_response = await admin_client.post(
                     f"/projects/{project_id}/users",
                     data={
-                        "user_ids": str(member_id),
+                        "user_ids": [str(member_id), str(viewer_id)],
                         "csrf_token": _csrf_token(assignment_page.text),
                     },
                 )
@@ -140,7 +150,12 @@ def test_authenticated_upload_analysis_findings_and_access_boundaries(tmp_path: 
                 detail_page = await admin_client.get(f"/projects/{project_id}")
                 upload_response = await admin_client.post(
                     f"/projects/{project_id}/analysis",
-                    data={"csrf_token": _csrf_token(detail_page.text)},
+                    data={
+                        "source_version": "source-v1",
+                        "deployment_version": "deploy-v1",
+                        "source_description": "첫 번째 분석 대상",
+                        "csrf_token": _csrf_token(detail_page.text),
+                    },
                     files={"source_file": ("source.zip", _vulnerable_zip(), "application/zip")},
                 )
                 assert upload_response.status_code == 303
@@ -154,6 +169,36 @@ def test_authenticated_upload_analysis_findings_and_access_boundaries(tmp_path: 
                 analysis_detail = await admin_client.get(f"/analysis/{analysis_id}")
                 assert "활성 규칙: 10개" in analysis_detail.text
                 assert "활성 규칙 구성 SHA-256" in analysis_detail.text
+                assert "source-v1" in analysis_detail.text
+                assert "deploy-v1" in analysis_detail.text
+                assert "첫 번째 분석 대상" in analysis_detail.text
+
+                current_project = await admin_client.get(f"/projects/{project_id}")
+                replacement_upload = await admin_client.post(
+                    f"/projects/{project_id}/analysis",
+                    data={
+                        "source_version": "source-v2",
+                        "deployment_version": "deploy-v2",
+                        "source_description": "다음 분석을 위한 교체 소스",
+                        "csrf_token": _csrf_token(current_project.text),
+                    },
+                    files={
+                        "source_file": (
+                            "source-v2.zip",
+                            _vulnerable_zip(),
+                            "application/zip",
+                        )
+                    },
+                )
+                assert replacement_upload.status_code == 303
+                historical_detail = await admin_client.get(f"/analysis/{analysis_id}")
+                assert "source-v1" in historical_detail.text
+                assert "deploy-v1" in historical_detail.text
+                assert "source-v2" not in historical_detail.text
+                analysis_history = await admin_client.get(
+                    f"/projects/{project_id}/analysis"
+                )
+                assert "source-v1 / deploy-v1" in analysis_history.text
 
                 findings_page = await admin_client.get(
                     f"/analysis/{analysis_id}/findings?severity=HIGH"
@@ -210,11 +255,46 @@ def test_authenticated_upload_analysis_findings_and_access_boundaries(tmp_path: 
                 assert (await member_client.get("/rules/new")).status_code == 403
                 assert (await member_client.get(f"/analysis/{analysis_id}")).status_code == 200
                 assert (await member_client.get(f"/analysis/{analysis_id}/findings")).status_code == 200
-                assert (await member_client.get(f"/findings/{finding_id}")).status_code == 200
+                member_finding = await member_client.get(f"/findings/{finding_id}")
+                assert member_finding.status_code == 200
+                status_response = await member_client.post(
+                    f"/findings/{finding_id}/status",
+                    data={
+                        "workflow_status": "RESOLVED",
+                        "note": "프로젝트 담당자가 수정 여부를 확인함",
+                        "csrf_token": _csrf_token(member_finding.text),
+                    },
+                )
+                assert status_response.status_code == 303
                 member_failure = await member_client.get(
                     f"/analysis/{failed_analysis_id}"
                 )
                 assert "private analyzer detail" in member_failure.text
+
+            async with AsyncClient(
+                transport=transport, base_url="http://testserver", follow_redirects=False
+            ) as viewer_client:
+                await _login(
+                    viewer_client,
+                    "viewer@company.com",
+                    "viewer-password",
+                    new_password="viewer-personal-password",
+                )
+                viewer_finding = await viewer_client.get(f"/findings/{finding_id}")
+                assert viewer_finding.status_code == 200
+                assert "조치 완료" in viewer_finding.text
+                assert "프로젝트 담당자가 수정 여부를 확인함" in viewer_finding.text
+                assert "조치 상태 저장" not in viewer_finding.text
+                viewer_projects = await viewer_client.get("/projects")
+                viewer_update = await viewer_client.post(
+                    f"/findings/{finding_id}/status",
+                    data={
+                        "workflow_status": "OPEN",
+                        "note": "일반 사용자는 변경할 수 없어야 함",
+                        "csrf_token": _csrf_token(viewer_projects.text),
+                    },
+                )
+                assert viewer_update.status_code == 403
 
             async with AsyncClient(
                 transport=transport, base_url="http://testserver", follow_redirects=False
@@ -234,7 +314,7 @@ def test_authenticated_upload_analysis_findings_and_access_boundaries(tmp_path: 
                 assert (await outsider_client.get(f"/findings/{finding_id}")).status_code == 404
                 return project_id, analysis_id, finding_id
 
-    _, analysis_id, _ = asyncio.run(exercise())
+    _, analysis_id, finding_id = asyncio.run(exercise())
     with Session(application.state.db_engine) as session:
         analysis_run = session.get(AnalysisRun, analysis_id)
         findings = session.scalars(
@@ -252,6 +332,16 @@ def test_authenticated_upload_analysis_findings_and_access_boundaries(tmp_path: 
             "stored_finding_count": 4,
         }
         assert analysis_run.summary["provenance"]["selected_language"] == "PYTHON"
+        assert analysis_run.summary["provenance"]["source_metadata"] == {
+            "source_version": "source-v1",
+            "deployment_version": "deploy-v1",
+            "description": "첫 번째 분석 대상",
+        }
         assert len(analysis_run.summary["provenance"]["active_rules"]) == 10
         assert len(analysis_run.summary["provenance"]["active_rules_sha256"]) == 64
         assert len(findings) == 4
+        workflow = session.get(FindingWorkflow, finding_id)
+        assert workflow is not None
+        assert workflow.status is FindingStatus.RESOLVED
+        assert workflow.updater is not None
+        assert workflow.updater.username == "member@company.com"

@@ -16,15 +16,18 @@
       <label>신뢰도
         <select name="confidence"><option value="">전체</option>{% for value in confidence_values %}<option value="{{ value.value }}" {% if selected_confidence == value %}selected{% endif %}>{{ value.value }}</option>{% endfor %}</select>
       </label>
+      <label>조치 상태
+        <select name="status"><option value="">전체</option>{% for value in status_values %}<option value="{{ value.value }}" {% if selected_status == value %}selected{% endif %}>{{ status_labels[value] }}</option>{% endfor %}</select>
+      </label>
       <button type="submit">필터 적용</button>
     </form>
   </section>
   <section class="card top-gap">
     {% if findings %}
     <table>
-      <thead><tr><th>심각도</th><th>신뢰도</th><th>규칙</th><th>위치</th><th>메시지</th></tr></thead>
+      <thead><tr><th>심각도</th><th>신뢰도</th><th>조치 상태</th><th>규칙</th><th>위치</th><th>메시지</th></tr></thead>
       <tbody>{% for finding in findings %}<tr>
-        <td>{{ finding.severity.value }}</td><td>{{ finding.confidence.value }}</td><td><a href="/findings/{{ finding.id }}">{{ finding.rule_name }}</a></td>
+        <td>{{ finding.severity.value }}</td><td>{{ finding.confidence.value }}</td><td>{{ status_labels[finding.workflow.status] }}</td><td><a href="/findings/{{ finding.id }}">{{ finding.rule_name }}</a></td>
         <td>{{ finding.file_path }}:{{ finding.start_line }}</td><td>{{ finding.message }}</td>
       </tr>{% endfor %}</tbody>
     </table>

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from datetime import datetime, timezone
 from typing import Any
 
 from sqlalchemy import select
@@ -10,13 +11,18 @@ from sqlalchemy.orm import Session
 
 from app.db.models.analysis_run import AnalysisRun
 from app.db.models.diagnostic_rule import DiagnosticRule
-from app.db.models.enums import Confidence, Severity
+from app.db.models.enums import Confidence, FindingStatus, Language, Severity
 from app.db.models.finding import Finding
+from app.db.models.finding_workflow import FindingWorkflow
 from app.db.models.rule import Rule
 
 
 class FindingNormalizationError(ValueError):
     """Raised when Semgrep output cannot be normalized safely."""
+
+
+class FindingWorkflowError(ValueError):
+    """Raised when a remediation workflow update is invalid."""
 
 
 _SEMGREP_SEVERITY_MAP = {
@@ -67,12 +73,13 @@ def persist_normalized_findings(
     analysis_run_id: int,
     semgrep_result: dict[str, Any],
     source_root: Path,
+    scan_languages: set[Language] | None = None,
 ) -> int:
     """Persist results mapped to a compatible catalog rule; never invent one."""
     analysis_run = session.get(AnalysisRun, analysis_run_id)
     if analysis_run is None:
         raise FindingNormalizationError("분석 실행을 찾을 수 없습니다.")
-    language = analysis_run.language
+    allowed_languages = scan_languages or {analysis_run.language}
 
     results = semgrep_result.get("results")
     if not isinstance(results, list):
@@ -105,11 +112,11 @@ def persist_normalized_findings(
     }
     rules_by_standard_id = {rule.standard_id: rule for rule in rules}
     active_mappings = {
-        (mapping.catalog_rule_id, mapping.semgrep_rule_id)
+        (mapping.catalog_rule_id, mapping.semgrep_rule_id): mapping.language
         for mapping in session.scalars(
             select(DiagnosticRule).where(
                 DiagnosticRule.catalog_rule_id.in_([rule.id for rule in rules]),
-                DiagnosticRule.language == language,
+                DiagnosticRule.language.in_(allowed_languages),
                 DiagnosticRule.is_active.is_(True),
             )
         ).all()
@@ -133,14 +140,22 @@ def persist_normalized_findings(
             # Rule catalog ownership starts in Phase 8. Until then an unmapped
             # engine result must not produce a fabricated KISA association.
             continue
-        if language.value not in rule.supported_languages:
-            continue
         check_id_candidates = (
             {check_id, check_id.rsplit(".", 1)[-1]}
             if isinstance(check_id, str)
             else set()
         )
-        if not any((rule.id, candidate) in active_mappings for candidate in check_id_candidates):
+        mapping_language = next(
+            (
+                active_mappings[(rule.id, candidate)]
+                for candidate in check_id_candidates
+                if (rule.id, candidate) in active_mappings
+            ),
+            None,
+        )
+        if mapping_language is None:
+            continue
+        if mapping_language.value not in rule.supported_languages:
             continue
 
         if not isinstance(extra, dict):
@@ -173,7 +188,7 @@ def persist_normalized_findings(
                 rule_id=rule.id,
                 rule_name=rule.name,
                 kisa_id=rule.standard_id,
-                language=language,
+                language=mapping_language,
                 severity=severity,
                 confidence=confidence,
                 file_path=normalized_file_path,
@@ -188,4 +203,42 @@ def persist_normalized_findings(
             )
         )
     session.add_all(findings)
+    session.flush()
+    session.add_all(
+        FindingWorkflow(finding_id=finding.id, status=FindingStatus.OPEN)
+        for finding in findings
+    )
     return len(findings)
+
+
+def update_finding_workflow(
+    session: Session,
+    *,
+    finding_id: int,
+    workflow_status: FindingStatus,
+    note: str | None,
+    updated_by: int,
+) -> FindingWorkflow:
+    """Replace the latest remediation state without changing scan evidence."""
+    normalized_note = note.strip() if note else None
+    if normalized_note and len(normalized_note) > 2_000:
+        raise FindingWorkflowError("검토 의견은 2,000자 이하로 입력하세요.")
+    if workflow_status in {
+        FindingStatus.FALSE_POSITIVE,
+        FindingStatus.ACCEPTED_RISK,
+    } and not normalized_note:
+        raise FindingWorkflowError("오탐 또는 위험 수용에는 검토 의견이 필요합니다.")
+
+    with session.begin():
+        finding = session.get(Finding, finding_id)
+        if finding is None:
+            raise FindingWorkflowError("Finding을 찾을 수 없습니다.")
+        workflow = session.get(FindingWorkflow, finding_id)
+        if workflow is None:
+            workflow = FindingWorkflow(finding_id=finding_id)
+            session.add(workflow)
+        workflow.status = workflow_status
+        workflow.note = normalized_note
+        workflow.updated_by = updated_by
+        workflow.updated_at = datetime.now(timezone.utc)
+    return workflow

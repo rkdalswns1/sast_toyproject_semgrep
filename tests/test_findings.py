@@ -13,8 +13,15 @@ from app.analysis import service as analysis_service
 from app.config import Settings
 from app.db.models.analysis_run import AnalysisRun
 from app.db.models.diagnostic_rule import DiagnosticRule
-from app.db.models.enums import Confidence, ImplementationStatus, Language, Severity
+from app.db.models.enums import (
+    Confidence,
+    FindingStatus,
+    ImplementationStatus,
+    Language,
+    Severity,
+)
 from app.db.models.finding import Finding
+from app.db.models.finding_workflow import FindingWorkflow
 from app.db.models.rule import Rule
 from app.db.models.user import User
 from app.main import create_app
@@ -97,7 +104,7 @@ def test_semgrep_result_is_normalized_persisted_and_filterable(tmp_path: Path, m
 
     monkeypatch.setattr(analysis_service, "_run_semgrep_process", fake_run)
 
-    async def exercise() -> tuple[int, int]:
+    async def exercise() -> tuple[int, int, int]:
         async with application.router.lifespan_context(application):
             project_id = _seed_project_and_rule(application)
             transport = ASGITransport(app=application)
@@ -130,9 +137,42 @@ def test_semgrep_result_is_normalized_persisted_and_filterable(tmp_path: Path, m
                 assert "원본 Semgrep 결과" in detail_response.text
                 assert "dangerous_call(user_input)" in detail_response.text
                 assert "TEST-001" in detail_response.text
-                return project_id, analysis_id
+                assert "미조치" in detail_response.text
+                assert "admin@company.com" in (
+                    await client.get(f"/analysis/{analysis_id}")
+                ).text
+                assert (
+                    await client.post(
+                        f"/findings/{finding_id_match.group(1)}/status",
+                        data={"workflow_status": "IN_PROGRESS", "note": "review"},
+                    )
+                ).status_code == 403
+                token = _csrf_token(detail_response.text)
+                missing_reason = await client.post(
+                    f"/findings/{finding_id_match.group(1)}/status",
+                    data={
+                        "workflow_status": "FALSE_POSITIVE",
+                        "note": "",
+                        "csrf_token": token,
+                    },
+                )
+                assert missing_reason.status_code == 400
+                updated = await client.post(
+                    f"/findings/{finding_id_match.group(1)}/status",
+                    data={
+                        "workflow_status": "IN_PROGRESS",
+                        "note": "담당자가 원인을 확인하고 있습니다.",
+                        "csrf_token": token,
+                    },
+                )
+                assert updated.status_code == 303
+                filtered = await client.get(
+                    f"/analysis/{analysis_id}/findings?status=IN_PROGRESS"
+                )
+                assert "조치 중" in filtered.text
+                return project_id, analysis_id, int(finding_id_match.group(1))
 
-    _, analysis_id = asyncio.run(exercise())
+    _, analysis_id, finding_id = asyncio.run(exercise())
 
     with Session(application.state.db_engine) as session:
         analysis_run = session.get(AnalysisRun, analysis_id)
@@ -163,6 +203,13 @@ def test_semgrep_result_is_normalized_persisted_and_filterable(tmp_path: Path, m
         assert finding.raw_result == raw_result
         assert not Path(finding.raw_result["path"]).is_absolute()
         assert ".." not in Path(finding.raw_result["path"]).parts
+        workflow = session.get(FindingWorkflow, finding_id)
+        assert workflow is not None
+        assert workflow.status is FindingStatus.IN_PROGRESS
+        assert workflow.note == "담당자가 원인을 확인하고 있습니다."
+        assert workflow.updater is not None
+        assert workflow.updater.username == "admin@company.com"
+        assert workflow.updated_at is not None
 
 
 def test_unknown_semgrep_rule_is_not_saved_without_a_catalog_mapping(tmp_path: Path, monkeypatch) -> None:

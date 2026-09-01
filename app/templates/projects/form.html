@@ -12,6 +12,9 @@
     <label>설명<textarea name="description" rows="4">{{ submitted.description if submitted else project.description if project and project.description else '' }}</textarea></label>
     {% set selected_language = submitted.language if submitted else project.language.value if project else '' %}
     <label>언어<select name="language" required><option value="" disabled {% if not selected_language %}selected{% endif %}>언어 선택</option>{% for profile in language_profiles %}<option value="{{ profile.language.value }}" {% if selected_language == profile.language.value %}selected{% endif %}>{{ profile.label }}</option>{% endfor %}</select></label>
+    {% set multi_scan = submitted.scan_all_languages if submitted else project.scan_all_languages if project else true %}
+    <label class="checkbox"><input type="checkbox" name="scan_all_languages" value="true" {% if multi_scan %}checked{% endif %}>ZIP에서 Java, JavaScript, Python을 자동 감지해 함께 분석</label>
+    <p class="muted">선택한 언어는 프로젝트의 기준 언어로 표시됩니다. 자동 감지를 사용하면 ZIP에서 발견된 지원 언어를 한 번의 분석으로 검사합니다.</p>
     <p class="muted">ZIP 소스 업로드와 분석 실행은 프로젝트 생성 후 담당자 상세 화면에서 수행합니다.</p>
     <button type="submit">{{ "프로젝트 생성" if mode == "create" else "변경 저장" }}</button>
   </form>

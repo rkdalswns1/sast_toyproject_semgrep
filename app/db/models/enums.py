@@ -36,6 +36,14 @@ class Confidence(str, Enum):
     HIGH = "HIGH"
 
 
+class FindingStatus(str, Enum):
+    OPEN = "OPEN"
+    IN_PROGRESS = "IN_PROGRESS"
+    RESOLVED = "RESOLVED"
+    FALSE_POSITIVE = "FALSE_POSITIVE"
+    ACCEPTED_RISK = "ACCEPTED_RISK"
+
+
 class Language(str, Enum):
     JAVA = "JAVA"
     JAVASCRIPT = "JAVASCRIPT"

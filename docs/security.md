@@ -15,6 +15,9 @@
 - SUPER_ADMIN만 계정·역할·규칙을 관리하며 다른 사용자의 비밀번호를 직접 초기화하지 않는다.
 - 프로젝트 자원은 SUPER_ADMIN 여부 또는 `project_users` 관계를 확인한 후 접근한다. PROJECT_MANAGER의 쓰기 작업도 프로젝트 할당 관계를 확인한다.
 - 권한 없는 프로젝트, 분석 실행, Finding은 존재 여부가 드러나지 않도록 `404`를 반환한다.
+- CSV/PDF 보고서도 분석 화면과 동일한 프로젝트 접근 검사를 적용한다. 파일명에는 프로젝트명 등 사용자 입력을 사용하지 않는다.
+- CSV의 외부 유래 문자열이 스프레드시트 수식 접두사로 시작하면 텍스트로 이스케이프한다.
+- 보고서에는 정규화된 상대 파일 경로만 사용하고 Semgrep 원본 JSON, 내부 오류 원문과 시스템 절대경로를 포함하지 않는다.
 
 ## Source and Analysis Isolation
 
@@ -55,7 +58,9 @@ Critical 또는 High 취약점은 배포를 중단하고 수정 버전으로 갱
 | Jinja2 | 3.1.6 | BSD-3-Clause |
 | python-dotenv | 1.2.3 | BSD-3-Clause |
 | python-multipart | 0.0.32 | Apache-2.0 |
+| pypdf | 6.10.0 | BSD-3-Clause |
 | pytest | 9.1.1 | MIT |
+| ReportLab | 4.4.9 | BSD-3-Clause |
 | Semgrep | 1.175.0 | LGPL-2.1-or-later |
 | SQLAlchemy | 2.0.52 | MIT |
 | Uvicorn | 0.52.4 | BSD-3-Clause |

@@ -152,3 +152,113 @@ def test_vulnerable_and_safe_samples_match_expected_findings(
         assert safe_findings == []
         assert safe_run.summary["finding_count"] == 0
         assert safe_run.summary["stored_finding_count"] == 0
+
+
+def test_multi_language_project_scans_all_detected_languages_in_one_run(
+    tmp_path: Path,
+) -> None:
+    settings = _settings(tmp_path)
+    application = create_app(settings)
+
+    async def exercise() -> tuple[int, int]:
+        async with application.router.lifespan_context(application):
+            with Session(application.state.db_engine) as session:
+                admin = session.scalar(
+                    select(User).where(User.username == "admin@company.com")
+                )
+                assert admin is not None
+                admin_id = admin.id
+
+            run_ids: list[int] = []
+            for sample_kind in ("vulnerable", "safe"):
+                with Session(application.state.db_engine) as session:
+                    project = create_project(
+                        session,
+                        name=f"Mixed {sample_kind} expectation",
+                        description="Phase 12 mixed-language sample",
+                        language=Language.PYTHON,
+                        scan_all_languages=True,
+                        created_by=admin_id,
+                    )
+                    project_id = project.id
+
+                source_root = (
+                    settings.upload_dir
+                    / "projects"
+                    / str(project_id)
+                    / "sources"
+                    / sample_kind
+                    / "extracted"
+                )
+                for language in Language:
+                    expected = EXPECTED_FINDINGS[language.value]
+                    filename_key = f"{sample_kind}_file"
+                    source_file = (
+                        SAMPLES_ROOT
+                        / language.value.lower()
+                        / expected[filename_key]
+                    )
+                    destination = source_root / language.value.lower()
+                    destination.mkdir(parents=True, exist_ok=True)
+                    shutil.copy2(source_file, destination / source_file.name)
+
+                with Session(application.state.db_engine) as session:
+                    update_project_source(
+                        session, project_id=project_id, source_path=source_root
+                    )
+                    run = execute_project_analysis(
+                        session,
+                        project_id=project_id,
+                        executed_by=admin_id,
+                        settings=settings,
+                    )
+                    run_ids.append(run.id)
+            return run_ids[0], run_ids[1]
+
+    vulnerable_run_id, safe_run_id = asyncio.run(exercise())
+
+    with Session(application.state.db_engine) as session:
+        vulnerable_run = session.get(AnalysisRun, vulnerable_run_id)
+        safe_run = session.get(AnalysisRun, safe_run_id)
+        assert vulnerable_run is not None and vulnerable_run.summary is not None
+        assert safe_run is not None and safe_run.summary is not None
+        assert vulnerable_run.status is AnalysisStatus.COMPLETED
+        assert safe_run.status is AnalysisStatus.COMPLETED
+        assert vulnerable_run.summary["provenance"]["scan_mode"] == "MULTI"
+        assert vulnerable_run.summary["provenance"]["detected_languages"] == [
+            "JAVA",
+            "JAVASCRIPT",
+            "PYTHON",
+        ]
+        assert vulnerable_run.summary["provenance"]["scanned_languages"] == [
+            "JAVA",
+            "JAVASCRIPT",
+            "PYTHON",
+        ]
+        assert len(vulnerable_run.summary["provenance"]["active_rules"]) == 29
+        assert vulnerable_run.summary["stored_finding_count_by_language"] == {
+            "JAVA": 10,
+            "JAVASCRIPT": 9,
+            "PYTHON": 10,
+        }
+
+        findings = session.scalars(
+            select(Finding).where(Finding.analysis_run_id == vulnerable_run_id)
+        ).all()
+        assert len(findings) == 29
+        for language in Language:
+            language_findings = {
+                finding.kisa_id
+                for finding in findings
+                if finding.language is language
+            }
+            assert language_findings == set(
+                EXPECTED_FINDINGS[language.value]["findings"]
+            )
+
+        safe_findings = session.scalars(
+            select(Finding).where(Finding.analysis_run_id == safe_run_id)
+        ).all()
+        assert safe_findings == []
+        assert safe_run.summary["finding_count"] == 0
+        assert safe_run.summary["stored_finding_count"] == 0
