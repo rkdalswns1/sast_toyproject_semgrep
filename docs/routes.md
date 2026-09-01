@@ -6,9 +6,13 @@
 GET  /login
 POST /login
 POST /logout
+GET  /account/password
+POST /account/password
 ```
 
-## Users — ADMIN only
+신규 계정은 로그인 후 `/account/password`로 이동하며 현재 초기 비밀번호와 새 비밀번호를 입력한다. 변경 전에는 로그아웃과 비밀번호 변경 경로만 사용할 수 있다. 변경을 완료한 사용자도 같은 경로에서 현재 비밀번호 확인 후 자신의 비밀번호를 변경할 수 있다.
+
+## Users — SUPER_ADMIN only
 
 ```text
 GET  /users
@@ -17,12 +21,9 @@ POST /users
 GET  /users/{user_id}/edit
 POST /users/{user_id}/edit
 POST /users/{user_id}/toggle-active
-POST /users/{user_id}/reset-password
 ```
 
-사용자 물리 삭제 경로는 제공하지 않는다. 인증된 일반 USER가 `/users` 경로에 접근하면 403으로 처리하고, 로그인하지 않은 사용자는 `/login`으로 이동한다.
-
-비밀번호 초기화는 ADMIN이 새 비밀번호와 확인값을 직접 입력하는 방식으로 처리한다. 임시 비밀번호 자동 생성과 이메일 발송은 구현하지 않는다.
+사용자 물리 삭제와 관리자의 임의 비밀번호 초기화 경로는 제공하지 않는다. PROJECT_MANAGER와 USER가 `/users` 경로에 접근하면 403으로 처리하고, 로그인하지 않은 사용자는 `/login`으로 이동한다.
 
 모든 `POST` 경로는 CSRF 토큰이 필요하며, 토큰이 없거나 유효하지 않으면 `403`으로 처리한다.
 
@@ -47,7 +48,7 @@ GET  /projects/{project_id}/analysis
 GET  /analysis/{analysis_id}
 ```
 
-`POST /projects/{project_id}/analysis`는 ZIP 업로드와 분석 실행 모두 ADMIN 전용이다. 일반 USER는 할당된 프로젝트의 분석 이력과 완료된 결과를 읽기 전용으로 조회할 수 있다. 분석 실패 원문은 ADMIN에게만 표시한다.
+`POST /projects/{project_id}/analysis`는 SUPER_ADMIN 또는 해당 프로젝트에 할당된 PROJECT_MANAGER만 사용할 수 있다. USER는 할당된 프로젝트의 분석 이력과 완료된 결과를 읽기 전용으로 조회할 수 있다. 분석 실패 원문은 SUPER_ADMIN과 담당 PROJECT_MANAGER에게만 표시한다.
 
 ## Findings
 
@@ -70,8 +71,8 @@ POST /rules/{rule_id}/edit
 POST /rules/{rule_id}/toggle-active
 ```
 
-`/rules`와 `/rules/{rule_id}`는 인증된 ADMIN과 USER가 조회할 수 있다. 검색어, 분류, 구현 상태, 지원 언어, 활성 상태 필터를 지원한다.
+`/rules`와 `/rules/{rule_id}`는 인증된 모든 역할이 조회할 수 있다. 검색어, 분류, 구현 상태, 지원 언어, 활성 상태 필터를 지원한다.
 
-`/rules/new`, `POST /rules`, `/rules/{rule_id}/edit`, `POST /rules/{rule_id}/edit`, `POST /rules/{rule_id}/toggle-active`는 ADMIN 전용이다. ADMIN은 아직 언어별 규칙이 연결되지 않은 KISA 카탈로그 항목을 선택하고 Java, JavaScript, Python의 Semgrep Rule ID를 직접 입력한다. 공식 KISA ID·명칭·분류·항목 번호와 YAML 내용은 웹에서 만들거나 수정하지 않는다.
+`/rules/new`, `POST /rules`, `/rules/{rule_id}/edit`, `POST /rules/{rule_id}/edit`, `POST /rules/{rule_id}/toggle-active`는 SUPER_ADMIN 전용이다. SUPER_ADMIN은 아직 언어별 규칙이 연결되지 않은 KISA 카탈로그 항목을 선택하고 Java, JavaScript, Python의 Semgrep Rule ID를 직접 입력한다. 공식 KISA ID·명칭·분류·항목 번호와 YAML 내용은 웹에서 만들거나 수정하지 않는다.
 
-모든 `POST` 경로는 CSRF 토큰이 필요하다. USER에게 관리 버튼을 표시하지 않고, 직접 관리 URL에 접근하면 `403`으로 처리한다.
+모든 `POST` 경로는 CSRF 토큰이 필요하다. PROJECT_MANAGER와 USER에게 규칙 관리 버튼을 표시하지 않고, 직접 관리 URL에 접근하면 `403`으로 처리한다.

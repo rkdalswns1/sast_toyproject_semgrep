@@ -29,6 +29,9 @@ class User(TimestampMixin, Base):
     is_active: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=True, server_default=text("1")
     )
+    must_change_password: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default=text("0")
+    )
 
     created_projects: Mapped[list[Project]] = relationship(
         back_populates="creator", foreign_keys="Project.created_by"
@@ -42,4 +45,3 @@ class User(TimestampMixin, Base):
     projects: Mapped[list[Project]] = relationship(
         secondary="project_users", back_populates="users", viewonly=True
     )
-

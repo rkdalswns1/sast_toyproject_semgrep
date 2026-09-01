@@ -6,7 +6,7 @@
 <main class="page-shell">
   <header class="page-header">
     <div><p class="eyebrow">프로젝트</p><h1>{{ project.name }}</h1><p class="muted">{{ project.description or "프로젝트 설명이 없습니다." }}</p></div>
-    <div class="header-actions"><a class="secondary button" href="/projects">목록</a>{% if is_admin %}<a class="secondary button" href="/projects/{{ project.id }}/users">사용자 할당</a><a class="button" href="/projects/{{ project.id }}/edit">프로젝트 수정</a>{% endif %}</div>
+    <div class="header-actions"><a class="secondary button" href="/projects">목록</a>{% if can_manage_project %}<a class="secondary button" href="/projects/{{ project.id }}/users">사용자 할당</a><a class="button" href="/projects/{{ project.id }}/edit">프로젝트 수정</a>{% endif %}</div>
   </header>
   <section class="card metadata-grid">
     <div><span>언어</span><strong>{{ project.language.value }}</strong></div>
@@ -14,7 +14,7 @@
     <div><span>생성자</span><strong>{{ project.creator.username }}</strong></div>
     <div><span>생성 일시</span><strong>{{ project.created_at.strftime('%Y-%m-%d %H:%M') }}</strong></div>
   </section>
-  {% if is_admin %}
+  {% if can_manage_project %}
   <section class="card top-gap">
     <h2>ZIP 소스 업로드</h2>
     <p class="muted">ZIP 최대 20 MiB · 압축 해제 후 최대 100 MiB · ZIP Slip 및 심볼릭 링크는 거부됩니다.</p>
@@ -37,7 +37,7 @@
   {% elif project.source_path %}
   <section class="card top-gap">
     <h2>분석 결과</h2>
-    <p class="muted">일반 사용자는 관리자가 실행한 분석 이력과 결과를 읽기 전용으로 조회할 수 있습니다.</p>
+    <p class="muted">일반 사용자는 담당자가 실행한 분석 이력과 결과를 읽기 전용으로 조회할 수 있습니다.</p>
     <a class="button" href="/projects/{{ project.id }}/analysis">분석 실행 이력 보기</a>
   </section>
   {% endif %}

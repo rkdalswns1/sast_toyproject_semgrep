@@ -8,7 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.analysis.service import AnalysisExecutionError, execute_project_analysis
-from app.auth.dependencies import current_active_user, get_db, is_admin
+from app.auth.dependencies import can_operate_project, current_active_user, get_db
 from app.auth.session import csrf_is_valid, csrf_token, persist_session
 from app.db.models.analysis_run import AnalysisRun
 from app.db.models.user import User
@@ -43,6 +43,8 @@ def _require_user(request: Request, session: Session) -> User | RedirectResponse
     user = current_active_user(request, session)
     if user is None:
         return _redirect("/login", request)
+    if user.must_change_password:
+        return _redirect("/account/password", request)
     return user
 
 
@@ -67,7 +69,7 @@ async def upload_project_source_or_run_analysis(
     if isinstance(user, RedirectResponse):
         return user
     project = accessible_project_or_404(session, project_id, user)
-    if not is_admin(user):
+    if not can_operate_project(user):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN)
     stored_project_id = project.id
 
@@ -89,7 +91,7 @@ async def upload_project_source_or_run_analysis(
                 {
                     "project": project,
                     "current_user": user,
-                    "is_admin": True,
+                    "can_manage_project": True,
                     "upload_error": str(exc),
                     "analysis_error": None,
                 },
@@ -113,7 +115,7 @@ async def upload_project_source_or_run_analysis(
             {
                 "project": project,
                 "current_user": user,
-                "is_admin": True,
+                "can_manage_project": True,
                 "upload_error": None,
                 "analysis_error": str(exc),
             },
@@ -159,6 +161,6 @@ async def analysis_detail(
         {
             "analysis_run": analysis_run,
             "current_user": user,
-            "is_admin": is_admin(user),
+            "can_view_error": can_operate_project(user),
         },
     )

@@ -90,12 +90,12 @@ def test_create_all_builds_domain_tables_schema_history_and_foreign_keys(
         versions = session.scalars(
             select(SchemaVersion).order_by(SchemaVersion.version)
         ).all()
-        assert [version.version for version in versions] == [1, 2, 3, 4, 5]
+        assert [version.version for version in versions] == [1, 2, 3, 4, 5, 6]
         assert all(version.description and version.applied_at for version in versions)
 
     initialize_database(engine)
     with Session(engine) as session:
-        assert session.scalar(select(func.count()).select_from(SchemaVersion)) == 5
+        assert session.scalar(select(func.count()).select_from(SchemaVersion)) == 6
 
     engine.dispose()
 
@@ -149,7 +149,108 @@ def test_existing_database_is_upgraded_and_migration_is_recorded(
         assert legacy_rule.is_active is True
         assert session.scalars(
             select(SchemaVersion.version).order_by(SchemaVersion.version)
-        ).all() == [1, 2, 3, 4, 5]
+        ).all() == [1, 2, 3, 4, 5, 6]
+
+    engine.dispose()
+
+
+def test_legacy_admin_roles_are_migrated_without_breaking_project_relations(
+    tmp_path: Path,
+) -> None:
+    engine = create_db_engine(f"sqlite:///{tmp_path / 'legacy-users.db'}")
+    with engine.begin() as connection:
+        connection.execute(
+            text(
+                """
+                CREATE TABLE users (
+                    id INTEGER NOT NULL PRIMARY KEY,
+                    username VARCHAR(100) NOT NULL UNIQUE,
+                    password_hash VARCHAR(255) NOT NULL,
+                    role VARCHAR(5) NOT NULL,
+                    is_active BOOLEAN NOT NULL DEFAULT 1,
+                    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    CONSTRAINT user_role CHECK (role IN ('ADMIN', 'USER'))
+                )
+                """
+            )
+        )
+        connection.execute(
+            text(
+                """
+                CREATE TABLE projects (
+                    id INTEGER NOT NULL PRIMARY KEY,
+                    name VARCHAR(200) NOT NULL,
+                    description TEXT,
+                    source_type VARCHAR(3) NOT NULL,
+                    language VARCHAR(10) NOT NULL,
+                    source_path VARCHAR(500) NOT NULL,
+                    created_by INTEGER NOT NULL,
+                    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY(created_by) REFERENCES users(id) ON DELETE RESTRICT
+                )
+                """
+            )
+        )
+        connection.execute(
+            text(
+                """
+                CREATE TABLE project_users (
+                    project_id INTEGER NOT NULL,
+                    user_id INTEGER NOT NULL,
+                    PRIMARY KEY (project_id, user_id),
+                    FOREIGN KEY(project_id) REFERENCES projects(id) ON DELETE CASCADE,
+                    FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+                )
+                """
+            )
+        )
+        connection.execute(
+            text(
+                "INSERT INTO users (id, username, password_hash, role) VALUES "
+                "(1, 'admin@company.com', 'admin-hash', 'ADMIN'), "
+                "(2, 'member@company.com', 'member-hash', 'USER')"
+            )
+        )
+        connection.execute(
+            text(
+                "INSERT INTO projects "
+                "(id, name, source_type, language, source_path, created_by) "
+                "VALUES (1, 'Legacy project', 'ZIP', 'PYTHON', 'uploads/legacy.zip', 1)"
+            )
+        )
+        connection.execute(
+            text(
+                "INSERT INTO project_users (project_id, user_id) "
+                "VALUES (1, 1), (1, 2)"
+            )
+        )
+
+    initialize_database(engine)
+
+    with engine.connect() as connection:
+        migrated_users = connection.execute(
+            text(
+                "SELECT id, role, must_change_password FROM users ORDER BY id"
+            )
+        ).all()
+        assert migrated_users == [(1, "SUPER_ADMIN", 0), (2, "USER", 0)]
+        assert connection.execute(
+            text("SELECT created_by FROM projects WHERE id = 1")
+        ).scalar_one() == 1
+        assert connection.execute(
+            text(
+                "SELECT user_id FROM project_users "
+                "WHERE project_id = 1 ORDER BY user_id"
+            )
+        ).scalars().all() == [1, 2]
+        assert connection.execute(text("PRAGMA foreign_key_check")).all() == []
+
+    with Session(engine) as session:
+        assert session.get(User, 1).role is UserRole.SUPER_ADMIN
+        assert session.get(User, 2).must_change_password is False
+        assert session.get(SchemaVersion, 6) is not None
 
     engine.dispose()
 
@@ -229,7 +330,7 @@ def test_models_persist_and_project_deletion_cascades(tmp_path: Path) -> None:
         user = User(
             username="owner",
             password_hash="hashed-password",
-            role=UserRole.ADMIN,
+            role=UserRole.SUPER_ADMIN,
         )
         session.add(user)
         session.flush()
@@ -307,7 +408,7 @@ def test_existing_finding_raw_path_is_normalized_by_migration(tmp_path: Path) ->
         user = User(
             username="owner@company.com",
             password_hash="hashed-password",
-            role=UserRole.ADMIN,
+            role=UserRole.SUPER_ADMIN,
         )
         session.add(user)
         session.flush()

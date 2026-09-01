@@ -23,6 +23,8 @@ Python 패키지 버전을 루트 `requirements.txt`에 고정하고 `.env.examp
 
 ## Phase 3 — Authentication
 
+> Phase 3의 `ADMIN`·관리자 비밀번호 초기화 정책은 Phase 10에서 3단계 역할과 본인 비밀번호 변경 정책으로 대체한다. 아래 내용은 최초 구현 이력이다.
+
 서명된 쿠키 세션 로그인·로그아웃, bcrypt 비밀번호 해시, ADMIN / USER 권한 검사를 구현한다. 쿠키에는 `user_id`만 저장하고 사용자 역할과 활성 상태는 요청마다 DB에서 조회한다. Phase 3 시작 시 `bcrypt`, `itsdangerous`, `python-multipart`를 루트 `requirements.txt`에 정확한 버전으로 추가하고, 새 가상환경에서 설치를 확인한다.
 
 FastAPI 의존성으로 요청마다 DB Session을 만들고, 예외 시 rollback·요청 종료 시 close한다. 모든 상태 변경 `POST` 폼(로그인·로그아웃 포함)에 세션 기반 CSRF 토큰을 적용하고, 누락 또는 불일치는 `403`으로 처리한다.
@@ -104,3 +106,24 @@ TST-001~008은 각각 구현 위치와 독립적인 자동 검증 근거를 가�
 QLT-001~005는 책임별 라우트·서비스 소유권, 진단 항목별 독립 규칙 파일, 공통 언어 registry·분석 흐름·Finding 계약, 프로젝트-실행-결과-Rule 정합성의 자동 구조 시험으로 검증한다.
 
 완료조건: 전체 테스트 통과 및 요구사항 추적표 작성.
+
+## Phase 10 — Role and Password Policy
+
+역할을 `SUPER_ADMIN`, `PROJECT_MANAGER`, `USER`로 개편하고 기존 `ADMIN`은 스키마 마이그레이션으로 `SUPER_ADMIN`으로 변환한다.
+
+- SUPER_ADMIN은 사용자·규칙 관리, 프로젝트 생성 및 모든 프로젝트에 접근한다.
+- PROJECT_MANAGER는 할당된 프로젝트의 수정, 사용자 배정, ZIP 업로드, 분석 실행, 분석 오류와 결과 조회를 수행한다.
+- USER는 할당된 프로젝트의 분석 이력과 Finding을 읽기 전용으로 조회한다.
+- SUPER_ADMIN이 지정한 초기 비밀번호로 생성된 신규 계정은 최초 로그인 후 `/account/password`에서 개인 비밀번호를 반드시 변경한다.
+- 이후 사용자는 현재 비밀번호 확인 후 자신의 비밀번호만 변경할 수 있다.
+- 기존 ADMIN의 임의 비밀번호 초기화 경로는 제거한다.
+
+완료조건:
+
+- 기존 ADMIN·관계 데이터가 SUPER_ADMIN으로 손실 없이 마이그레이션됨
+- 신규 계정의 최초 비밀번호 변경 강제 및 직접 보호 URL 우회 차단
+- 본인 비밀번호 변경 시 현재 비밀번호 검증과 bcrypt 해시 교체
+- SUPER_ADMIN, 할당된 PROJECT_MANAGER, USER의 역할별 허용·거부 기능 검증
+- 미할당 PROJECT_MANAGER와 USER의 프로젝트·분석·Finding 404 유지
+- 기존 관리자 비밀번호 초기화 경로 제거
+- 전체 자동 테스트와 애플리케이션 기동 확인

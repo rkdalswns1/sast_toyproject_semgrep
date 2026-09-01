@@ -13,14 +13,14 @@
 - SAST engine: Semgrep
 - Source input: ZIP upload only
 - Authentication: signed cookie session
-- Roles: ADMIN and USER
+- Roles: SUPER_ADMIN, PROJECT_MANAGER, and USER
 - Test framework: pytest
 - Python: 3.12
 - Database initialization: SQLAlchemy `create_all()`
 - Schema history: repo-local ordered migrations recorded in `schema_versions`
 - Configuration: environment variables loaded from `.env`
 - Account identifier: company email ending in `@company.com`
-- Bootstrap administrator: `admin@company.com` / `admin`, password stored as bcrypt hash
+- Bootstrap super administrator: `admin@company.com` / `admin`, password stored as bcrypt hash
 - Semgrep timeout: 60 seconds
 - Session secret: at least 32 bytes and never the example placeholder
 - Semgrep resource limits: 2 jobs, 1,024 MiB memory, 1,000,000-byte target, 20 MiB JSON output
@@ -40,8 +40,8 @@
 11. KISA 카탈로그는 `docs/kisa-catalog.md`를 따른다.
 12. KISA 49개 항목은 사용자가 제공한 공식 자료 없이 추측하여 작성하지 않는다.
 13. Python 패키지 버전은 루트 `requirements.txt`에 고정한다.
-14. ZIP 소스 업로드, 프로젝트 변경, 분석 실행 및 분석 오류 원문 조회는 ADMIN만 수행한다.
-15. 일반 USER는 할당된 프로젝트의 분석 이력과 Finding만 읽기 전용으로 조회한다.
+14. 프로젝트 생성·계정·규칙 관리는 SUPER_ADMIN만 수행한다. ZIP 소스 업로드, 할당된 프로젝트 변경·사용자 배정·분석 실행 및 분석 오류 원문 조회는 SUPER_ADMIN 또는 해당 프로젝트에 할당된 PROJECT_MANAGER만 수행한다.
+15. 일반 USER는 할당된 프로젝트의 분석 이력과 Finding만 읽기 전용으로 조회한다. 신규 계정은 최초 로그인 후 개인 비밀번호를 변경하기 전까지 다른 보호 기능을 사용할 수 없다.
 16. `create_all()` 이후 `app/db/migrations.py`의 버전 마이그레이션을 적용하고 성공한 버전을 `schema_versions`에 기록한다.
 17. 보안 통제와 외부 구성요소 관리 절차는 `docs/security.md`를 따른다.
 18. RFP 시험 기준, 정상·취약 샘플 및 기대 결과는 `docs/testing.md`와 `tests/samples/`를 따른다.

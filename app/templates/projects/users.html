@@ -4,7 +4,7 @@
 
 {% block content %}
 <main class="page-shell narrow">
-  <header class="page-header"><div><p class="eyebrow">SecureScan · ADMIN</p><h1>프로젝트 사용자 할당</h1><p class="muted">{{ project.name }}</p></div><a class="secondary button" href="/projects/{{ project.id }}">프로젝트 상세</a></header>
+  <header class="page-header"><div><p class="eyebrow">SecureScan · {{ current_user.role.value }}</p><h1>프로젝트 사용자 할당</h1><p class="muted">{{ project.name }}</p></div><a class="secondary button" href="/projects/{{ project.id }}">프로젝트 상세</a></header>
   <form method="post" action="/projects/{{ project.id }}/users" class="card form-stack">
     <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
     <p class="muted">선택한 사용자만 프로젝트를 조회할 수 있습니다. 프로젝트 생성자는 항상 유지됩니다.</p>

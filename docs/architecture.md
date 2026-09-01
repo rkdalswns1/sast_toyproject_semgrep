@@ -31,7 +31,14 @@ uploads/
 
 `app/auth/`, `app/projects/`, `app/analysis/`, `app/findings/`, `app/rules/`는 각각 인증, 프로젝트, 분석 실행, 정규화 결과, 진단 항목의 서비스와 라우트를 소유한다. 프로젝트 접근 검사는 `app/projects/access.py`를 공유하되 분석과 Finding URL 라우트는 각 책임 모듈에 둔다.
 
-`app/rules/semgrep/kisa-2021/`는 KISA 진단 항목마다 개발자가 관리하는 독립 YAML 파일 하나를 두고, `scripts/`는 seed와 관리용 일회성 작업만 담당한다. 웹 애플리케이션은 YAML을 해석하지 않고 ADMIN이 입력한 언어별 Semgrep Rule ID와 KISA 카탈로그의 연결만 DB에 저장한다. 세부 품질·확장 계약은 `quality.md`를 따른다.
+`app/rules/semgrep/kisa-2021/`는 KISA 진단 항목마다 개발자가 관리하는 독립 YAML 파일 하나를 두고, `scripts/`는 seed와 관리용 일회성 작업만 담당한다. 웹 애플리케이션은 YAML을 해석하지 않고 SUPER_ADMIN이 입력한 언어별 Semgrep Rule ID와 KISA 카탈로그의 연결만 DB에 저장한다. 세부 품질·확장 계약은 `quality.md`를 따른다.
+
+## Authorization Model
+
+- `SUPER_ADMIN`은 계정·규칙·프로젝트 생성과 모든 프로젝트 자원에 접근한다.
+- `PROJECT_MANAGER`는 `project_users`로 할당된 프로젝트의 정보 수정, 사용자 배정, ZIP 업로드, 분석 실행과 오류 원문 조회를 수행한다.
+- `USER`는 `project_users`로 할당된 프로젝트의 분석 이력과 Finding을 읽기 전용으로 조회한다.
+- 신규 계정은 `must_change_password=true`로 생성하며 최초 로그인 후 본인이 현재 초기 비밀번호를 확인하고 새 비밀번호로 변경하기 전까지 다른 보호 기능에 접근하지 못한다.
 
 ## Analysis Flow
 

@@ -8,20 +8,20 @@ isolated upload directory; no test uses the developer's local project data.
 | RFP ID | Status | Implementation / evidence |
 |---|---|---|
 | SFR-001 | Implemented | Company email validation in `app/auth/identifiers.py`; bootstrap and rejection tests in `tests/test_authentication.py` |
-| SFR-003 | Implemented | ADMIN/USER checks in auth and project routes; read-only USER integration assertions in `tests/test_end_to_end.py` |
-| SFR-008 | Implemented | ZIP upload and Semgrep execution POST are ADMIN-only in `app/projects/routes.py` |
+| SFR-003 | Implemented | SUPER_ADMIN/PROJECT_MANAGER/USER checks in auth and project routes; role integration assertions in `tests/test_authentication.py`, `tests/test_projects.py`, and `tests/test_end_to_end.py` |
+| SFR-008 | Implemented | ZIP upload and Semgrep execution POST are limited to SUPER_ADMIN or the assigned PROJECT_MANAGER in `app/analysis/routes.py` |
 | SFR-009 | Implemented | Per-run source/ruleset hashes, active-rule list/hash, source snapshot, engine version and detected language in `AnalysisRun.summary.provenance` |
 | SFR-010 | Implemented | Central registry and extension-based detection in `app/analysis/languages.py`; project forms and scanner use the same profiles |
 | SFR-011 | Implemented (PARTIAL rules) | Java, JavaScript and Python each map the same eight KISA items; real-engine tests in `tests/test_rule_catalog.py` and `tests/test_diagnostic_examples.py` |
-| SFR-012 | Implemented | Developers maintain Semgrep YAML files; ADMIN registers and edits KISA item, language and Rule ID mappings through `/rules/new`, and persisted mappings control Finding storage. |
-| SFR-013 | Implemented | Authenticated catalog list/detail, filters and ADMIN/USER view separation in `app/rules/routes.py` and rule templates |
+| SFR-012 | Implemented | Developers maintain Semgrep YAML files; SUPER_ADMIN registers and edits KISA item, language and Rule ID mappings through `/rules/new`, and persisted mappings control Finding storage. |
+| SFR-013 | Implemented | Authenticated catalog list/detail, filters and SUPER_ADMIN management separation in `app/rules/routes.py` and rule templates |
 
 ## Data Requirement Status
 
 | RFP ID | Status | Implementation / evidence |
 |---|---|---|
 | DAR-001 | Implemented | SQLite transactions/FKs plus ordered migrations in `app/db/migrations.py` and applied history in `schema_versions` |
-| DAR-002 | Implemented | `User` model and timestamp mixin; schema/authentication tests |
+| DAR-002 | Implemented | `User` model includes three roles and `must_change_password`; schema/migration/authentication tests |
 | DAR-003 | Implemented | `Project` model and project tests |
 | DAR-004 | Implemented | `ProjectUser` composite relationship and access tests |
 | DAR-005 | Implemented | `AnalysisRun` model, lifecycle service and execution tests |
@@ -37,38 +37,38 @@ isolated upload directory; no test uses the developer's local project data.
 |---|---|---|
 | SEC-001 | Implemented | Required bcrypt dependency and fail-closed password helpers in `app/auth/security.py`; hash and response-boundary tests in `tests/test_authentication.py` |
 | SEC-002 | Implemented | Signed, expiring cookie session and CSRF rotation in `app/auth/session.py`; missing, tampered and expired session tests in `tests/test_authentication.py` |
-| SEC-003 | Implemented | ADMIN checks for project mutation, membership, upload, analysis and error detail in auth/project routes; integration tests |
-| SEC-004 | Implemented | Assigned USER read-only routes and blocked POST/management routes in `tests/test_projects.py` and `tests/test_end_to_end.py` |
+| SEC-003 | Implemented | SUPER_ADMIN-only system management plus assigned PROJECT_MANAGER project mutation, membership, upload, analysis and error-detail checks; integration tests |
+| SEC-004 | Implemented | Assigned USER read-only routes and unassigned manager/member restrictions in project/end-to-end tests |
 | SEC-005 | Implemented | `_accessible_project_or_404` verifies `project_users` instead of trusting route IDs; project/analysis/Finding access tests |
 | SEC-006 | Implemented | Inaccessible project, analysis and Finding resources consistently return `404`; outsider end-to-end assertions |
 | SEC-007 | Implemented | Project-bound source validation, owner-only per-run workspaces, regular-file copy, cleanup and allowlisted Semgrep child environment |
 | SEC-008 | Implemented | ZIP signature, traversal, absolute path, link, special file, duplicate path, encrypted archive and byte-limit checks in `app/projects/upload.py` |
-| SEC-009 | Implemented | Upload limits plus Semgrep jobs, memory, target, JSON output, bounded stderr and wall-time limits; process-group termination and ADMIN-only error detail tests |
+| SEC-009 | Implemented | Upload limits plus Semgrep jobs, memory, target, JSON output, bounded stderr and wall-time limits; process-group termination and operator-only error detail tests |
 | SEC-010 | Implemented | Exact pins in `requirements.txt`, weekly Dependabot configuration, license inventory and update response policy in `docs/security.md` |
 
 ## Test Requirement Status
 
 | RFP ID | Status | Implementation / evidence |
 |---|---|---|
-| TST-001 | Implemented | ADMIN·USER login, signed-cookie rotation, logout and unauthenticated blocking in `tests/test_authentication.py` |
-| TST-002 | Implemented | USER project create/edit, membership and analysis POST denial plus ADMIN success paths in project/end-to-end tests |
+| TST-001 | Implemented | Three-role login, forced initial password change, self-service password change, signed-cookie rotation, logout and unauthenticated blocking in `tests/test_authentication.py` |
+| TST-002 | Implemented | SUPER_ADMIN full management, assigned PROJECT_MANAGER operations, USER read-only restrictions in project/end-to-end tests |
 | TST-003 | Implemented | Assigned-user project/result access and unassigned-user project, run and Finding `404` assertions in project/end-to-end tests |
 | TST-004 | Implemented | ZIP upload, language provenance, real Semgrep rule execution and normalized Finding persistence in end-to-end/diagnostic tests |
 | TST-005 | Implemented | Fixed vulnerable/safe Java, JavaScript and Python samples with expected rule, line, severity and confidence in `tests/samples/` |
 | TST-006 | Implemented | All 49 Rules have unique identifier, category, positive item number, name and implementation status in `tests/test_rule_catalog.py` |
 | TST-007 | Implemented | Analysis status/summary, Finding storage, severity/confidence filters, detail data and Rule FK checks in Finding/end-to-end tests |
-| TST-008 | Implemented | Invalid target, nonzero exit with bounded stderr preservation, timeout, ADMIN-only error detail, correction/re-run and failed-history preservation in analysis tests |
+| TST-008 | Implemented | Invalid target, nonzero exit with bounded stderr preservation, timeout, operator-only error detail, correction/re-run and failed-history preservation in analysis tests |
 
 | Requirement group | Implementation | Automated verification |
 |---|---|---|
 | Application startup, environment loading, SQLite schema | `app/config.py`, `app/db/database.py`, `app/main.py` | `tests/test_bootstrap.py`, `tests/test_database_schema.py` |
 | Authentication, signed session, CSRF, password hashing | `app/auth/` | `tests/test_authentication.py` |
 | Company email identifier policy and legacy admin migration | `app/auth/identifiers.py`, `app/auth/services.py` | `tests/test_authentication.py` |
-| ADMIN user management and protected administrator state | `app/auth/services.py`, `app/auth/routes.py` | `tests/test_authentication.py` |
+| SUPER_ADMIN user management, protected super-administrator state and self-service password changes | `app/auth/services.py`, `app/auth/routes.py` | `tests/test_authentication.py` |
 | Project CRUD, membership, and project visibility | `app/projects/services.py`, `app/projects/routes.py` | `tests/test_projects.py`, `tests/test_end_to_end.py` |
 | ZIP-only upload and safe extraction | `app/projects/upload.py` | `tests/test_source_upload.py` |
 | ZIP Slip, symbolic link, path traversal, and size limits | `app/projects/upload.py` | `tests/test_source_upload.py` |
-| ADMIN-only source mutation/analysis and USER read-only results | `app/analysis/routes.py`, project/analysis templates | `tests/test_end_to_end.py` |
+| SUPER_ADMIN/assigned PROJECT_MANAGER source mutation and analysis; USER read-only results | `app/analysis/routes.py`, project/analysis templates | `tests/test_end_to_end.py` |
 | Semgrep per-run workspace isolation, minimal child environment, timeout, error status, JSON collection, and per-run provenance | `app/analysis/service.py` | `tests/test_analysis_execution.py` |
 | Registered-language detection and language-scoped scanning | `app/analysis/languages.py`, `app/analysis/service.py` | `tests/test_analysis_execution.py`, `tests/test_rule_catalog.py` |
 | Git-ignored upload source scanning | `app/analysis/service.py` (`--no-git-ignore`) | `tests/test_analysis_execution.py`, `tests/test_end_to_end.py` |

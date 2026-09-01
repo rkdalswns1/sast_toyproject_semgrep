@@ -5,10 +5,10 @@
 {% block content %}
 <main class="page-shell">
   <header class="page-header">
-    <div><p class="eyebrow">SecureScan{% if is_admin %} · ADMIN{% endif %}</p><h1>프로젝트 목록</h1></div>
+    <div><p class="eyebrow">SecureScan{% if is_super_admin %} · SUPER_ADMIN{% elif current_user.role.value == 'PROJECT_MANAGER' %} · PROJECT_MANAGER{% endif %}</p><h1>프로젝트 목록</h1></div>
     <div class="header-actions">
       <a class="secondary button catalog-action" href="/rules">KISA 규칙 카탈로그</a>
-      {% if is_admin %}<a class="button" href="/projects/new">+ 프로젝트 생성</a><a class="secondary button" href="/users">사용자 관리</a>{% endif %}
+      {% if is_super_admin %}<a class="button" href="/projects/new">+ 프로젝트 생성</a><a class="secondary button" href="/users">사용자 관리</a>{% endif %}
       <span>{{ current_user.username }}</span>
       <form method="post" action="/logout"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button class="secondary" type="submit">로그아웃</button></form>
     </div>
@@ -22,7 +22,7 @@
       {% endfor %}</tbody>
     </table>
     {% else %}
-    <div class="empty-state"><h2>등록된 프로젝트가 없습니다</h2><p class="muted">{% if is_admin %}프로젝트를 생성하여 정적 분석을 준비하세요.{% else %}관리자가 프로젝트에 사용자를 할당하면 이곳에 표시됩니다.{% endif %}</p>{% if is_admin %}<a class="button" href="/projects/new">프로젝트 생성</a>{% endif %}</div>
+    <div class="empty-state"><h2>등록된 프로젝트가 없습니다</h2><p class="muted">{% if is_super_admin %}프로젝트를 생성하여 정적 분석을 준비하세요.{% else %}최고 관리자가 프로젝트에 사용자를 할당하면 이곳에 표시됩니다.{% endif %}</p>{% if is_super_admin %}<a class="button" href="/projects/new">프로젝트 생성</a>{% endif %}</div>
     {% endif %}
   </section>
 </main>

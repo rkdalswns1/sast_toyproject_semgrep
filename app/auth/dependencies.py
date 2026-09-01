@@ -34,5 +34,13 @@ def current_active_user(request: Request, session: Session) -> User | None:
     return user
 
 
-def is_admin(user: User | None) -> bool:
-    return user is not None and user.role is UserRole.ADMIN
+def is_super_admin(user: User | None) -> bool:
+    return user is not None and user.role is UserRole.SUPER_ADMIN
+
+
+def is_project_manager(user: User | None) -> bool:
+    return user is not None and user.role is UserRole.PROJECT_MANAGER
+
+
+def can_operate_project(user: User | None) -> bool:
+    return is_super_admin(user) or is_project_manager(user)

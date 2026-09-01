@@ -7,7 +7,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.auth.identifiers import AccountIdentifierError, normalize_company_email
-from app.auth.security import hash_password
+from app.auth.security import hash_password, verify_password
 from app.db.models.enums import UserRole
 from app.db.models.user import User
 
@@ -30,8 +30,9 @@ def bootstrap_administrator(
                 User(
                     username=administrator_identifier,
                     password_hash=hash_password("admin"),
-                    role=UserRole.ADMIN,
+                    role=UserRole.SUPER_ADMIN,
                     is_active=True,
+                    must_change_password=False,
                 )
             )
             return
@@ -42,7 +43,7 @@ def bootstrap_administrator(
         if company_admin_exists is None:
             legacy_admin = session.scalar(
                 select(User).where(
-                    User.username == "admin", User.role == UserRole.ADMIN
+                    User.username == "admin", User.role == UserRole.SUPER_ADMIN
                 )
             )
             if legacy_admin is not None:
@@ -70,6 +71,7 @@ def create_user(
         password_hash=hash_password(password),
         role=role,
         is_active=is_active,
+        must_change_password=True,
     )
     try:
         with session.begin():
@@ -87,11 +89,13 @@ def _require_target(session: Session, user_id: int) -> User:
     return user
 
 
-def _would_remove_last_active_admin(user: User, role: UserRole, is_active: bool) -> bool:
+def _would_remove_last_active_super_admin(
+    user: User, role: UserRole, is_active: bool
+) -> bool:
     return (
         user.is_active
-        and user.role is UserRole.ADMIN
-        and (role is not UserRole.ADMIN or not is_active)
+        and user.role is UserRole.SUPER_ADMIN
+        and (role is not UserRole.SUPER_ADMIN or not is_active)
     )
 
 
@@ -108,14 +112,14 @@ def update_user(
         user = _require_target(session, target_user_id)
         if actor_user_id == user.id and not is_active:
             raise UserManagementError("자기 자신을 비활성화할 수 없습니다.")
-        if _would_remove_last_active_admin(user, role, is_active):
-            active_admin_count = session.scalar(
+        if _would_remove_last_active_super_admin(user, role, is_active):
+            active_super_admin_count = session.scalar(
                 select(func.count())
                 .select_from(User)
-                .where(User.is_active.is_(True), User.role == UserRole.ADMIN)
+                .where(User.is_active.is_(True), User.role == UserRole.SUPER_ADMIN)
             )
-            if active_admin_count <= 1:
-                raise UserManagementError("마지막 활성 ADMIN은 변경할 수 없습니다.")
+            if active_super_admin_count <= 1:
+                raise UserManagementError("마지막 활성 SUPER_ADMIN은 변경할 수 없습니다.")
         user.role = role
         user.is_active = is_active
     return user
@@ -129,21 +133,30 @@ def toggle_user_active(
         new_is_active = not user.is_active
         if actor_user_id == user.id and not new_is_active:
             raise UserManagementError("자기 자신을 비활성화할 수 없습니다.")
-        if _would_remove_last_active_admin(user, user.role, new_is_active):
-            active_admin_count = session.scalar(
+        if _would_remove_last_active_super_admin(user, user.role, new_is_active):
+            active_super_admin_count = session.scalar(
                 select(func.count())
                 .select_from(User)
-                .where(User.is_active.is_(True), User.role == UserRole.ADMIN)
+                .where(User.is_active.is_(True), User.role == UserRole.SUPER_ADMIN)
             )
-            if active_admin_count <= 1:
-                raise UserManagementError("마지막 활성 ADMIN은 비활성화할 수 없습니다.")
+            if active_super_admin_count <= 1:
+                raise UserManagementError(
+                    "마지막 활성 SUPER_ADMIN은 비활성화할 수 없습니다."
+                )
         user.is_active = new_is_active
     return user
 
 
-def reset_password(session: Session, *, target_user_id: int, password: str) -> None:
-    if not password:
-        raise UserManagementError("새 비밀번호는 필수입니다.")
+def change_own_password(
+    session: Session, *, user_id: int, current_password: str, new_password: str
+) -> None:
+    if not current_password or not new_password:
+        raise UserManagementError("현재 비밀번호와 새 비밀번호는 필수입니다.")
     with session.begin():
-        user = _require_target(session, target_user_id)
-        user.password_hash = hash_password(password)
+        user = _require_target(session, user_id)
+        if not verify_password(current_password, user.password_hash):
+            raise UserManagementError("현재 비밀번호가 올바르지 않습니다.")
+        if verify_password(new_password, user.password_hash):
+            raise UserManagementError("새 비밀번호는 현재 비밀번호와 달라야 합니다.")
+        user.password_hash = hash_password(new_password)
+        user.must_change_password = False

@@ -4,7 +4,7 @@
 
 {% block content %}
 <main class="page-shell narrow">
-  <header class="page-header"><div><p class="eyebrow">SecureScan · ADMIN</p><h1>프로젝트 {{ "생성" if mode == "create" else "수정" }}</h1></div><a class="secondary button" href="/projects{% if project %}/{{ project.id }}{% endif %}">취소</a></header>
+  <header class="page-header"><div><p class="eyebrow">SecureScan · {{ current_user.role.value }}</p><h1>프로젝트 {{ "생성" if mode == "create" else "수정" }}</h1></div><a class="secondary button" href="/projects{% if project %}/{{ project.id }}{% endif %}">취소</a></header>
   {% if error %}<p class="alert error">{{ error }}</p>{% endif %}
   <form method="post" action="{% if mode == 'create' %}/projects{% else %}/projects/{{ project.id }}/edit{% endif %}" class="card form-stack">
     <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
@@ -12,7 +12,7 @@
     <label>설명<textarea name="description" rows="4">{{ submitted.description if submitted else project.description if project and project.description else '' }}</textarea></label>
     {% set selected_language = submitted.language if submitted else project.language.value if project else '' %}
     <label>언어<select name="language" required><option value="" disabled {% if not selected_language %}selected{% endif %}>언어 선택</option>{% for profile in language_profiles %}<option value="{{ profile.language.value }}" {% if selected_language == profile.language.value %}selected{% endif %}>{{ profile.label }}</option>{% endfor %}</select></label>
-    <p class="muted">ZIP 소스 업로드와 분석 실행은 프로젝트 생성 후 ADMIN 상세 화면에서 수행합니다.</p>
+    <p class="muted">ZIP 소스 업로드와 분석 실행은 프로젝트 생성 후 담당자 상세 화면에서 수행합니다.</p>
     <button type="submit">{{ "프로젝트 생성" if mode == "create" else "변경 저장" }}</button>
   </form>
 </main>

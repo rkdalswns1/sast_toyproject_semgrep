@@ -9,7 +9,12 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.auth.dependencies import current_active_user, get_db, is_admin
+from app.auth.dependencies import (
+    can_operate_project,
+    current_active_user,
+    get_db,
+    is_super_admin,
+)
 from app.auth.session import csrf_is_valid, csrf_token, persist_session
 from app.analysis.languages import LANGUAGE_PROFILES
 from app.db.models.enums import Language
@@ -50,14 +55,16 @@ def _require_user(request: Request, session: Session) -> User | RedirectResponse
     user = current_active_user(request, session)
     if user is None:
         return _redirect("/login", request)
+    if user.must_change_password:
+        return _redirect("/account/password", request)
     return user
 
 
-def _require_admin(request: Request, session: Session) -> User | RedirectResponse:
+def _require_super_admin(request: Request, session: Session) -> User | RedirectResponse:
     user = _require_user(request, session)
     if isinstance(user, RedirectResponse):
         return user
-    if not is_admin(user):
+    if not is_super_admin(user):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN)
     return user
 
@@ -80,19 +87,23 @@ async def project_list(request: Request, session: Session = Depends(get_db)) -> 
     if isinstance(user, RedirectResponse):
         return user
     statement = select(Project).order_by(Project.name)
-    if not is_admin(user):
+    if not is_super_admin(user):
         statement = statement.join(ProjectUser).where(ProjectUser.user_id == user.id)
     projects = session.scalars(statement).all()
     return _render(
         request,
         "projects/list.html",
-        {"projects": projects, "current_user": user, "is_admin": is_admin(user)},
+        {
+            "projects": projects,
+            "current_user": user,
+            "is_super_admin": is_super_admin(user),
+        },
     )
 
 
 @router.get("/projects/new", response_class=HTMLResponse)
 async def new_project_page(request: Request, session: Session = Depends(get_db)) -> Response:
-    admin = _require_admin(request, session)
+    admin = _require_super_admin(request, session)
     if isinstance(admin, RedirectResponse):
         return admin
     return _render(
@@ -118,7 +129,7 @@ async def create_project_page(
     session: Session = Depends(get_db),
 ) -> Response:
     _csrf_or_403(request, submitted_csrf_token)
-    admin = _require_admin(request, session)
+    admin = _require_super_admin(request, session)
     if isinstance(admin, RedirectResponse):
         return admin
     try:
@@ -162,7 +173,7 @@ async def project_detail(
         {
             "project": project,
             "current_user": user,
-            "is_admin": is_admin(user),
+            "can_manage_project": can_operate_project(user),
             "upload_error": None,
             "analysis_error": None,
         },
@@ -173,10 +184,12 @@ async def project_detail(
 async def edit_project_page(
     project_id: int, request: Request, session: Session = Depends(get_db)
 ) -> Response:
-    admin = _require_admin(request, session)
-    if isinstance(admin, RedirectResponse):
-        return admin
-    project = accessible_project_or_404(session, project_id, admin)
+    user = _require_user(request, session)
+    if isinstance(user, RedirectResponse):
+        return user
+    project = accessible_project_or_404(session, project_id, user)
+    if not can_operate_project(user):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN)
     return _render(
         request,
         "projects/form.html",
@@ -184,7 +197,7 @@ async def edit_project_page(
             "mode": "edit",
             "project": project,
             "error": None,
-            "current_user": admin,
+            "current_user": user,
             "language_profiles": LANGUAGE_PROFILES,
         },
     )
@@ -201,10 +214,12 @@ async def edit_project(
     session: Session = Depends(get_db),
 ) -> Response:
     _csrf_or_403(request, submitted_csrf_token)
-    admin = _require_admin(request, session)
-    if isinstance(admin, RedirectResponse):
-        return admin
-    accessible_project_or_404(session, project_id, admin)
+    user = _require_user(request, session)
+    if isinstance(user, RedirectResponse):
+        return user
+    accessible_project_or_404(session, project_id, user)
+    if not can_operate_project(user):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN)
     try:
         session.rollback()
         update_project(
@@ -223,7 +238,7 @@ async def edit_project(
                 "mode": "edit",
                 "project": project,
                 "error": str(exc),
-                "current_user": admin,
+                "current_user": user,
                 "language_profiles": LANGUAGE_PROFILES,
             },
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -235,10 +250,12 @@ async def edit_project(
 async def project_users_page(
     project_id: int, request: Request, session: Session = Depends(get_db)
 ) -> Response:
-    admin = _require_admin(request, session)
-    if isinstance(admin, RedirectResponse):
-        return admin
-    project = accessible_project_or_404(session, project_id, admin)
+    user = _require_user(request, session)
+    if isinstance(user, RedirectResponse):
+        return user
+    project = accessible_project_or_404(session, project_id, user)
+    if not can_operate_project(user):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN)
     assigned_user_ids = set(
         session.scalars(
             select(ProjectUser.user_id).where(ProjectUser.project_id == project.id)
@@ -252,7 +269,7 @@ async def project_users_page(
             "project": project,
             "users": users,
             "assigned_user_ids": assigned_user_ids,
-            "current_user": admin,
+            "current_user": user,
         },
     )
 
@@ -266,10 +283,12 @@ async def update_project_users(
     session: Session = Depends(get_db),
 ) -> RedirectResponse:
     _csrf_or_403(request, submitted_csrf_token)
-    admin = _require_admin(request, session)
-    if isinstance(admin, RedirectResponse):
-        return admin
-    accessible_project_or_404(session, project_id, admin)
+    user = _require_user(request, session)
+    if isinstance(user, RedirectResponse):
+        return user
+    accessible_project_or_404(session, project_id, user)
+    if not can_operate_project(user):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN)
     try:
         session.rollback()
         replace_project_members(session, project_id=project_id, user_ids=user_ids)

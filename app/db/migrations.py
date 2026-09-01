@@ -20,6 +20,7 @@ class SchemaMigration:
     version: int
     description: str
     apply: MigrationOperation
+    requires_foreign_keys_off: bool = False
 
 
 def _record_initial_schema(_: Connection) -> None:
@@ -118,6 +119,49 @@ def _normalize_existing_finding_raw_paths(connection: Connection) -> None:
         )
 
 
+def _upgrade_user_roles_and_password_policy(connection: Connection) -> None:
+    """Rebuild legacy SQLite users while preserving identifiers and relations."""
+    columns = {
+        column["name"] for column in inspect(connection).get_columns("users")
+    }
+    if "must_change_password" in columns:
+        return
+
+    connection.execute(text("DROP TABLE IF EXISTS users_phase10"))
+    connection.execute(
+        text(
+            "CREATE TABLE users_phase10 ("
+            "id INTEGER NOT NULL PRIMARY KEY, "
+            "username VARCHAR(100) NOT NULL UNIQUE, "
+            "password_hash VARCHAR(255) NOT NULL, "
+            "role VARCHAR(15) NOT NULL, "
+            "is_active BOOLEAN NOT NULL DEFAULT 1, "
+            "must_change_password BOOLEAN NOT NULL DEFAULT 0, "
+            "created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, "
+            "updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, "
+            "CONSTRAINT user_role CHECK ("
+            "role IN ('SUPER_ADMIN', 'PROJECT_MANAGER', 'USER')"
+            ")"
+            ")"
+        )
+    )
+    connection.execute(
+        text(
+            "INSERT INTO users_phase10 ("
+            "id, username, password_hash, role, is_active, "
+            "must_change_password, created_at, updated_at"
+            ") SELECT id, username, password_hash, "
+            "CASE role WHEN 'ADMIN' THEN 'SUPER_ADMIN' ELSE 'USER' END, "
+            "is_active, 0, created_at, updated_at FROM users"
+        )
+    )
+    connection.execute(text("DROP TABLE users"))
+    connection.execute(text("ALTER TABLE users_phase10 RENAME TO users"))
+    violations = connection.execute(text("PRAGMA foreign_key_check")).all()
+    if violations:
+        raise RuntimeError("User role migration would violate foreign keys")
+
+
 SCHEMA_MIGRATIONS: tuple[SchemaMigration, ...] = (
     SchemaMigration(1, "Initial SAST domain schema baseline", _record_initial_schema),
     SchemaMigration(
@@ -140,24 +184,39 @@ SCHEMA_MIGRATIONS: tuple[SchemaMigration, ...] = (
         "Normalize stored Semgrep result paths to source-relative paths",
         _normalize_existing_finding_raw_paths,
     ),
+    SchemaMigration(
+        6,
+        "Add three roles and initial-password change state to users",
+        _upgrade_user_roles_and_password_policy,
+        requires_foreign_keys_off=True,
+    ),
 )
 
 
 def apply_schema_migrations(engine: Engine) -> None:
     """Apply each missing migration once and record only successful versions."""
     for migration in SCHEMA_MIGRATIONS:
-        with engine.begin() as connection:
-            already_applied = connection.scalar(
-                select(SchemaVersion.version).where(
-                    SchemaVersion.version == migration.version
-                )
-            )
-            if already_applied is not None:
-                continue
-            migration.apply(connection)
-            connection.execute(
-                SchemaVersion.__table__.insert().values(
-                    version=migration.version,
-                    description=migration.description,
-                )
-            )
+        with engine.connect() as connection:
+            if migration.requires_foreign_keys_off and engine.dialect.name == "sqlite":
+                connection.exec_driver_sql("PRAGMA foreign_keys=OFF")
+                connection.commit()
+            try:
+                with connection.begin():
+                    already_applied = connection.scalar(
+                        select(SchemaVersion.version).where(
+                            SchemaVersion.version == migration.version
+                        )
+                    )
+                    if already_applied is not None:
+                        continue
+                    migration.apply(connection)
+                    connection.execute(
+                        SchemaVersion.__table__.insert().values(
+                            version=migration.version,
+                            description=migration.description,
+                        )
+                    )
+            finally:
+                if migration.requires_foreign_keys_off and engine.dialect.name == "sqlite":
+                    connection.exec_driver_sql("PRAGMA foreign_keys=ON")
+                    connection.commit()

@@ -7,6 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.config import Settings
+from app.db.models.enums import UserRole
 from app.db.models.project import Project, ProjectUser
 from app.db.models.user import User
 from app.main import create_app
@@ -34,7 +35,13 @@ def _csrf_token(html: str) -> str:
     return match.group(1)
 
 
-async def _login(client: AsyncClient, username: str, password: str) -> None:
+async def _login(
+    client: AsyncClient,
+    username: str,
+    password: str,
+    *,
+    new_password: str | None = None,
+) -> None:
     login_page = await client.get("/login")
     response = await client.post(
         "/login",
@@ -45,6 +52,20 @@ async def _login(client: AsyncClient, username: str, password: str) -> None:
         },
     )
     assert response.status_code == 303
+    if response.headers["location"] == "/account/password":
+        assert new_password is not None
+        password_page = await client.get("/account/password")
+        changed = await client.post(
+            "/account/password",
+            data={
+                "current_password": password,
+                "new_password": new_password,
+                "new_password_confirmation": new_password,
+                "csrf_token": _csrf_token(password_page.text),
+            },
+        )
+        assert changed.status_code == 303
+        assert changed.headers["location"] == "/projects"
 
 
 def test_project_crud_membership_and_access_control(tmp_path: Path) -> None:
@@ -88,7 +109,7 @@ def test_project_crud_membership_and_access_control(tmp_path: Path) -> None:
                         "username": "member@company.com",
                         "password": "member-password",
                         "password_confirmation": "member-password",
-                        "role": "USER",
+                        "role": "PROJECT_MANAGER",
                         "is_active": "true",
                         "csrf_token": token,
                     },
@@ -126,7 +147,12 @@ def test_project_crud_membership_and_access_control(tmp_path: Path) -> None:
             async with AsyncClient(
                 transport=transport, base_url="http://testserver", follow_redirects=False
             ) as user_client:
-                await _login(user_client, "member@company.com", "member-password")
+                await _login(
+                    user_client,
+                    "member@company.com",
+                    "member-password",
+                    new_password="member-personal-password",
+                )
                 project_list = await user_client.get("/projects")
                 assert project_list.status_code == 200
                 assert "Gateway v2" in project_list.text
@@ -145,33 +171,32 @@ def test_project_crud_membership_and_access_control(tmp_path: Path) -> None:
                     await user_client.post(
                         f"/projects/{project_id}/edit",
                         data={
-                            "name": "Forbidden edit",
-                            "language": "PYTHON",
+                            "name": "Gateway managed",
+                            "description": "Managed by project manager",
+                            "language": "JAVA",
                             "csrf_token": user_token,
                         },
                     )
-                ).status_code == 403
-                assert (
-                    await user_client.post(
-                        f"/projects/{project_id}/users",
-                        data={"csrf_token": user_token},
-                    )
-                ).status_code == 403
+                ).status_code == 303
                 assert (await user_client.get(f"/projects/{project_id}")).status_code == 200
                 assert (await user_client.get("/projects/new")).status_code == 403
-                assert (await user_client.get(f"/projects/{project_id}/users")).status_code == 403
+                assert (await user_client.get(f"/projects/{project_id}/users")).status_code == 200
+                assert (await user_client.get("/users")).status_code == 403
+                assert (await user_client.get("/rules/new")).status_code == 403
 
     asyncio.run(exercise())
 
     with Session(application.state.db_engine) as session:
-        project = session.scalar(select(Project).where(Project.name == "Gateway v2"))
+        project = session.scalar(select(Project).where(Project.name == "Gateway managed"))
         assert project is not None
-        assert project.description == "Updated description"
+        assert project.description == "Managed by project manager"
         assert project.language.value == "JAVA"
         member = session.scalar(
             select(User).where(User.username == "member@company.com")
         )
         assert member is not None
+        assert member.role is UserRole.PROJECT_MANAGER
+        assert member.must_change_password is False
         member_ids = set(
             session.scalars(
                 select(ProjectUser.user_id).where(ProjectUser.project_id == project.id)
@@ -213,7 +238,12 @@ def test_unassigned_user_cannot_discover_project(tmp_path: Path) -> None:
             async with AsyncClient(
                 transport=transport, base_url="http://testserver", follow_redirects=False
             ) as user_client:
-                await _login(user_client, "outsider@company.com", "outsider-password")
+                await _login(
+                    user_client,
+                    "outsider@company.com",
+                    "outsider-password",
+                    new_password="outsider-personal-password",
+                )
                 assert "Private" not in (await user_client.get("/projects")).text
                 assert (await user_client.get(f"/projects/{project_id}")).status_code == 404
 

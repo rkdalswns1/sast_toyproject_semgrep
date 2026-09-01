@@ -1,10 +1,10 @@
-"""KISA catalog query and ADMIN diagnostic-rule mapping routes."""
+"""KISA catalog query and SUPER_ADMIN diagnostic-rule mapping routes."""
 from typing import Annotated
 from fastapi import APIRouter, Depends, Form, HTTPException, Request, Response, status
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
-from app.auth.dependencies import current_active_user, get_db, is_admin
+from app.auth.dependencies import current_active_user, get_db, is_super_admin
 from app.auth.session import csrf_is_valid, csrf_token, persist_session
 from app.db.models.enums import ImplementationStatus, Language
 from app.db.models.finding import Finding
@@ -18,10 +18,13 @@ def _render(request: Request, name: str, context: dict[str, object], status_code
 def _redirect(path: str, request: Request) -> RedirectResponse:
     response = RedirectResponse(path, status_code=status.HTTP_303_SEE_OTHER); persist_session(response, request); return response
 def _user(request: Request, session: Session) -> User | RedirectResponse:
-    user = current_active_user(request, session); return user if user is not None else _redirect("/login", request)
-def _admin(request: Request, session: Session) -> User | RedirectResponse:
+    user = current_active_user(request, session)
+    if user is None: return _redirect("/login", request)
+    if user.must_change_password: return _redirect("/account/password", request)
+    return user
+def _super_admin(request: Request, session: Session) -> User | RedirectResponse:
     user = _user(request, session)
-    if not isinstance(user, RedirectResponse) and not is_admin(user): raise HTTPException(status_code=403)
+    if not isinstance(user, RedirectResponse) and not is_super_admin(user): raise HTTPException(status_code=403)
     return user
 def _csrf(request: Request, token: str) -> None:
     if not csrf_is_valid(request, token): raise HTTPException(status_code=403)
@@ -75,7 +78,7 @@ async def rule_list(request: Request, q: str = "", category: str = "", implement
     if language: rules = [r for r in rules if language in r.supported_languages]
     if active in {"true", "false"}: rules = [r for r in rules if r.is_active is (active == "true")]
     all_rules = _rules(session)
-    return _render(request, "rules/list.html", {"rules": rules, "categories": sorted({r.category for r in all_rules}), "statuses": list(ImplementationStatus), "languages": list(Language), "filters": {"q":q,"category":category,"implementation_status":implementation_status,"language":language,"active":active}, "counts": {s: sum(r.implementation_status is s for r in all_rules) for s in ImplementationStatus}, "current_user": user, "is_admin": is_admin(user)})
+    return _render(request, "rules/list.html", {"rules": rules, "categories": sorted({r.category for r in all_rules}), "statuses": list(ImplementationStatus), "languages": list(Language), "filters": {"q":q,"category":category,"implementation_status":implementation_status,"language":language,"active":active}, "counts": {s: sum(r.implementation_status is s for r in all_rules) for s in ImplementationStatus}, "current_user": user, "is_super_admin": is_super_admin(user)})
 
 @router.get("/rules/{rule_id:int}", response_class=HTMLResponse)
 async def rule_detail(rule_id: int, request: Request, session: Session = Depends(get_db)) -> Response:
@@ -83,24 +86,24 @@ async def rule_detail(rule_id: int, request: Request, session: Session = Depends
     if isinstance(user, RedirectResponse): return user
     rule = session.scalar(select(Rule).options(selectinload(Rule.diagnostic_rules)).where(Rule.id == rule_id))
     if rule is None: raise HTTPException(status_code=404)
-    return _render(request, "rules/detail.html", {"rule": rule, "finding_count": session.scalar(select(func.count()).select_from(Finding).where(Finding.rule_id == rule.id)) or 0, "current_user": user, "is_admin": is_admin(user)})
+    return _render(request, "rules/detail.html", {"rule": rule, "finding_count": session.scalar(select(func.count()).select_from(Finding).where(Finding.rule_id == rule.id)) or 0, "current_user": user, "is_super_admin": is_super_admin(user)})
 
 @router.get("/rules/new", response_class=HTMLResponse)
 async def rule_new(request: Request, session: Session = Depends(get_db)) -> Response:
-    user = _admin(request, session)
+    user = _super_admin(request, session)
     if isinstance(user, RedirectResponse): return user
     return _render(request, "rules/form.html", _registration_context(session, user))
 
 @router.get("/rules/{rule_id:int}/edit", response_class=HTMLResponse)
 async def rule_edit(rule_id: int, request: Request, session: Session = Depends(get_db)) -> Response:
-    user = _admin(request, session)
+    user = _super_admin(request, session)
     if isinstance(user, RedirectResponse): return user
     rule = session.scalar(select(Rule).options(selectinload(Rule.diagnostic_rules)).where(Rule.id == rule_id))
     if rule is None: raise HTTPException(status_code=404)
     return _render(request, "rules/form.html", {"rule": rule, "catalog_rules": _rules(session), "languages": list(Language), "rule_ids": _stored_rule_ids(rule), "error": None, "current_user": user})
 
 async def _save(request: Request, session: Session, catalog_rule_id: int, rule_ids: dict[Language, str], token: str, *, create_mode: bool) -> Response:
-    _csrf(request, token); user = _admin(request, session)
+    _csrf(request, token); user = _super_admin(request, session)
     if isinstance(user, RedirectResponse): return user
     try:
         session.rollback(); rule = save_diagnostic_rule_mappings(session, catalog_rule_id=catalog_rule_id, rule_ids=rule_ids)
@@ -127,7 +130,7 @@ async def rule_update(rule_id: int, request: Request, java_rule_id: Annotated[st
 
 @router.post("/rules/{rule_id:int}/toggle-active")
 async def rule_toggle(rule_id: int, request: Request, submitted_csrf_token: Annotated[str, Form(alias="csrf_token")] = "", session: Session = Depends(get_db)) -> Response:
-    _csrf(request, submitted_csrf_token); user = _admin(request, session)
+    _csrf(request, submitted_csrf_token); user = _super_admin(request, session)
     if isinstance(user, RedirectResponse): return user
     try: session.rollback(); toggle_catalog_rule_active(session, catalog_rule_id=rule_id)
     except DiagnosticRuleManagementError as exc: raise HTTPException(status_code=400, detail=str(exc)) from exc

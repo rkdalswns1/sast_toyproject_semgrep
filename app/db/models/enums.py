@@ -4,7 +4,8 @@ from enum import Enum
 
 
 class UserRole(str, Enum):
-    ADMIN = "ADMIN"
+    SUPER_ADMIN = "SUPER_ADMIN"
+    PROJECT_MANAGER = "PROJECT_MANAGER"
     USER = "USER"
 
 
@@ -43,4 +44,3 @@ class Language(str, Enum):
 
 class SourceType(str, Enum):
     ZIP = "ZIP"
-

@@ -25,7 +25,7 @@ Semgrep 규칙은 `app/rules/semgrep/kisa-2021/` 아래에 KISA 진단 항목별
 2. 해당 항목의 독립 YAML 파일과 언어별 규칙
 3. `tests/samples/`의 고정 취약·정상 예제 및 `expected_findings.json`
 
-개발자는 YAML을 작성·시험하여 규칙 디렉터리에 배치한다. 웹 애플리케이션은 YAML을 해석하지 않으며, ADMIN이 입력한 KISA 항목·언어·Semgrep Rule ID 연결을 `diagnostic_rules`에 저장한다. 같은 KISA 항목과 언어 및 같은 Semgrep Rule ID의 중복은 DB 제약으로 방지한다.
+개발자는 YAML을 작성·시험하여 규칙 디렉터리에 배치한다. 웹 애플리케이션은 YAML을 해석하지 않으며, SUPER_ADMIN이 입력한 KISA 항목·언어·Semgrep Rule ID 연결을 `diagnostic_rules`에 저장한다. 같은 KISA 항목과 언어 및 같은 Semgrep Rule ID의 중복은 DB 제약으로 방지한다.
 
 공통 분석 실행 서비스나 Finding 모델을 항목별로 복제하지 않는다. AnalysisRun의 규칙 세트 SHA-256은 규칙 디렉터리의 상대 경로와 파일 내용을 정렬하여 계산하므로 어느 파일이 변경되어도 실행 이력에 반영된다.
 

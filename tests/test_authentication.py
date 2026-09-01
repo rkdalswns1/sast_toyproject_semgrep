@@ -166,6 +166,7 @@ def test_admin_user_management_and_role_protection(tmp_path: Path) -> None:
                     assert member is not None
                     assert member.password_hash != "member-password"
                     assert verify_password("member-password", member.password_hash)
+                    assert member.must_change_password is True
                     admin_id = admin.id
                     member_id = member.id
 
@@ -188,7 +189,7 @@ def test_admin_user_management_and_role_protection(tmp_path: Path) -> None:
                         "csrf_token": token,
                     },
                 )
-                assert reset.status_code == 303
+                assert reset.status_code == 404
 
             async with AsyncClient(
                 transport=transport, base_url="http://testserver", follow_redirects=False
@@ -200,12 +201,38 @@ def test_admin_user_management_and_role_protection(tmp_path: Path) -> None:
                     "/login",
                     data={
                         "username": "member@company.com",
-                        "password": "reset-password",
+                        "password": "member-password",
                         "csrf_token": user_token,
                     },
                 )
-                assert response.headers["location"] == "/projects"
+                assert response.headers["location"] == "/account/password"
                 assert user_client.cookies.get("sast_session") != anonymous_user_session
+                assert (await user_client.get("/projects")).headers["location"] == "/account/password"
+
+                password_page = await user_client.get("/account/password")
+                wrong_current = await user_client.post(
+                    "/account/password",
+                    data={
+                        "current_password": "wrong-password",
+                        "new_password": "personal-password",
+                        "new_password_confirmation": "personal-password",
+                        "csrf_token": _csrf_token(password_page.text),
+                    },
+                )
+                assert wrong_current.status_code == 400
+
+                password_page = await user_client.get("/account/password")
+                changed = await user_client.post(
+                    "/account/password",
+                    data={
+                        "current_password": "member-password",
+                        "new_password": "personal-password",
+                        "new_password_confirmation": "personal-password",
+                        "csrf_token": _csrf_token(password_page.text),
+                    },
+                )
+                assert changed.status_code == 303
+                assert changed.headers["location"] == "/projects"
                 assert (await user_client.get("/users")).status_code == 403
 
     asyncio.run(exercise())
@@ -215,7 +242,9 @@ def test_admin_user_management_and_role_protection(tmp_path: Path) -> None:
             select(User).where(User.username == "member@company.com")
         )
         assert member is not None
-        assert verify_password("reset-password", member.password_hash)
+        assert verify_password("personal-password", member.password_hash)
+        assert not verify_password("member-password", member.password_hash)
+        assert member.must_change_password is False
         assert member.role is UserRole.USER
 
 
@@ -227,7 +256,7 @@ def test_legacy_bootstrap_admin_identifier_is_migrated(tmp_path: Path) -> None:
             User(
                 username="admin",
                 password_hash=hash_password("admin"),
-                role=UserRole.ADMIN,
+                role=UserRole.SUPER_ADMIN,
                 is_active=True,
             )
         )

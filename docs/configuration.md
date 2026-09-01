@@ -33,7 +33,7 @@ Phase 1에서 프로젝트 루트에 `.env.example`을 생성한다. 실제 `.en
 | `SEMGREP_MAX_MEMORY_MB` | 아니요 | `1024` | Semgrep 규칙별 최대 메모리 MiB |
 | `SEMGREP_MAX_TARGET_BYTES` | 아니요 | `1000000` | Semgrep이 스캔할 개별 대상 파일 최대 크기 |
 | `MAX_SEMGREP_OUTPUT_BYTES` | 아니요 | `20971520` | Semgrep JSON 출력 최대 20 MiB |
-| `MAX_SEMGREP_ERROR_BYTES` | 아니요 | `65536` | ADMIN 확인용 Semgrep 오류 로그 최대 64 KiB |
+| `MAX_SEMGREP_ERROR_BYTES` | 아니요 | `65536` | SUPER_ADMIN 및 담당 PROJECT_MANAGER 확인용 Semgrep 오류 로그 최대 64 KiB |
 
 `SESSION_SECRET`은 코드에 기본값을 두지 않고 UTF-8 기준 최소 32바이트를 요구한다. `.env.example`의 예시 문자열은 실제 비밀키로 사용할 수 없다. 테스트에서는 별도 테스트 값을 주입한다. 새 비밀키는 다음과 같이 생성할 수 있다.
 
@@ -61,7 +61,7 @@ Phase 3부터 로그인, 로그아웃을 포함한 모든 상태 변경 `POST` �
 DB에는 아래 문자열을 대문자로 저장한다.
 
 ```text
-UserRole: ADMIN, USER
+UserRole: SUPER_ADMIN, PROJECT_MANAGER, USER
 AnalysisStatus: PENDING, RUNNING, COMPLETED, FAILED
 ImplementationStatus: IMPLEMENTED, PARTIAL, NOT_IMPLEMENTED
 Severity: INFO, LOW, MEDIUM, HIGH, CRITICAL
@@ -76,22 +76,32 @@ Python에서는 `str, Enum`을 상속한 Enum으로 정의한다. SQLAlchemy 모
 
 `diagnostic_rules.language`도 `Language` Enum 값을 사용한다. 같은 KISA 카탈로그 항목에는 언어별 Semgrep Rule ID를 하나씩만 연결하고, Semgrep Rule ID는 전체에서 중복될 수 없다.
 
-## Bootstrap Administrator
+## Bootstrap Super Administrator
 
 ```text
 username: admin@company.com
 password: admin
-role: ADMIN
+role: SUPER_ADMIN
 is_active: true
+must_change_password: false
 ```
 
-애플리케이션 시작 시 사용자 테이블이 비어 있으면 최초 관리자 계정을 한 번만 생성한다.
+애플리케이션 시작 시 사용자 테이블이 비어 있으면 최초 최고 관리자 계정을 한 번만 생성한다. 이 시스템 부트스트랩 계정은 UI에서 SUPER_ADMIN이 생성하는 일반 신규 계정과 구분하여 최초 변경 강제 대상에서 제외하지만, 외부 공개 전 기본 비밀번호를 변경해야 한다.
 
-기존 MVP DB에 `admin` 계정이 남아 있으면 시작 시 `admin@company.com`으로 한 번 전환한다.
+기존 MVP DB에 `admin` 계정이 남아 있으면 시작 시 `admin@company.com`으로 한 번 전환한다. 스키마 마이그레이션은 기존 `ADMIN` 역할을 `SUPER_ADMIN`으로 변환하고 기존 계정은 현재 비밀번호로 계속 로그인할 수 있도록 `must_change_password=false`로 이전한다.
 
 비밀번호는 bcrypt로 해시하여 `password_hash`에만 저장한다. 평문 비밀번호를 DB 또는 로그에 기록하지 않는다.
 
 기본 계정은 로컬 MVP 및 시연용이다. 외부에 공개되는 환경에서는 초기 비밀번호를 변경해야 한다.
+
+## Password Change Policy
+
+- SUPER_ADMIN이 신규 계정의 회사 이메일, 초기 비밀번호, 역할과 활성 상태를 지정한다.
+- 신규 계정은 `must_change_password=true`로 저장한다.
+- 최초 로그인 성공 후 `/account/password`로 이동하며 비밀번호 변경과 로그아웃 외의 보호 기능에 접근할 수 없다.
+- 사용자는 현재 비밀번호, 새 비밀번호와 확인값을 입력해 자신의 비밀번호만 변경한다.
+- 변경 성공 시 bcrypt 해시를 교체하고 `must_change_password=false`로 저장한다.
+- SUPER_ADMIN이 다른 사용자 비밀번호를 임의 값으로 초기화하는 경로는 제공하지 않는다.
 
 ## Account Identifier Policy
 
@@ -120,7 +130,7 @@ is_active: true
 - 업로드 루트와 분석 작업 디렉터리는 POSIX 환경에서 소유자만 접근하도록 `0700` 권한을 사용한다.
 - 저장된 소스 경로는 해당 프로젝트의 `projects/{project_id}/sources/` 경계 안에 있어야 한다.
 - Semgrep은 기본 2개 작업, 규칙별 1,024 MiB 메모리, 대상 파일 1,000,000바이트, JSON 출력 20 MiB로 제한한다.
-- Semgrep 오류 출력은 최대 64 KiB까지만 보존하며 일반 USER에게 노출하지 않는다.
+- Semgrep 오류 출력은 최대 64 KiB까지만 보존하며 SUPER_ADMIN과 해당 프로젝트의 PROJECT_MANAGER에게만 노출한다.
 - Semgrep 전체 실행 제한 시간은 60초이며 timeout 또는 출력 초과 시 전체 프로세스 그룹을 종료한다.
 - 모든 제한은 양의 정수 환경변수로 조정할 수 있다.
 

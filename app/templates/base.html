@@ -11,13 +11,16 @@
     <div class="app-layout">
       <aside class="site-sidebar">
         <a class="site-brand" href="/projects">SecureScan</a>
+        {% if not password_change_only|default(false) %}
         <nav class="site-nav-links" aria-label="주요 메뉴">
           <a href="/projects" {% if request.url.path.startswith('/projects') %}aria-current="page"{% endif %}>프로젝트</a>
           <a href="/rules" {% if request.url.path.startswith('/rules') %}aria-current="page"{% endif %}>KISA 규칙</a>
-          {% if current_user.role.value == "ADMIN" %}
+          {% if current_user.role.value == "SUPER_ADMIN" %}
           <a href="/users" {% if request.url.path.startswith('/users') %}aria-current="page"{% endif %}>사용자 관리</a>
           {% endif %}
+          <a href="/account/password" {% if request.url.path == '/account/password' %}aria-current="page"{% endif %}>비밀번호 변경</a>
         </nav>
+        {% endif %}
       </aside>
       <div class="app-content">
     {% endif %}

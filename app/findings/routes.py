@@ -42,6 +42,8 @@ def _require_user(request: Request, session: Session) -> User | RedirectResponse
     user = current_active_user(request, session)
     if user is None:
         return _redirect("/login", request)
+    if user.must_change_password:
+        return _redirect("/account/password", request)
     return user
 
 

@@ -1,4 +1,4 @@
-"""Server-rendered authentication and ADMIN user-management routes."""
+"""Authentication, self-service password, and SUPER_ADMIN user routes."""
 
 from __future__ import annotations
 
@@ -9,13 +9,13 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.auth.dependencies import current_active_user, get_db, is_admin
+from app.auth.dependencies import current_active_user, get_db, is_super_admin
 from app.auth.identifiers import AccountIdentifierError, normalize_company_email
 from app.auth.security import verify_password
 from app.auth.services import (
     UserManagementError,
+    change_own_password,
     create_user,
-    reset_password,
     toggle_user_active,
     update_user,
 )
@@ -58,11 +58,13 @@ def _csrf_or_403(request: Request, submitted_token: str) -> None:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Invalid CSRF token")
 
 
-def _require_admin(request: Request, session: Session) -> User | RedirectResponse:
+def _require_super_admin(request: Request, session: Session) -> User | RedirectResponse:
     user = current_active_user(request, session)
     if user is None:
         return _redirect("/login", request)
-    if not is_admin(user):
+    if user.must_change_password:
+        return _redirect("/account/password", request)
+    if not is_super_admin(user):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN)
     return user
 
@@ -76,8 +78,11 @@ def _parse_role(value: str) -> UserRole:
 
 @router.get("/login", response_class=HTMLResponse)
 async def login_page(request: Request, session: Session = Depends(get_db)) -> Response:
-    if current_active_user(request, session) is not None:
-        return _redirect("/users", request)
+    user = current_active_user(request, session)
+    if user is not None:
+        return _redirect(
+            "/account/password" if user.must_change_password else "/projects", request
+        )
     return _render(request, "auth/login.html", {"error": None, "username": ""})
 
 
@@ -105,7 +110,9 @@ async def login(
             status_code=status.HTTP_400_BAD_REQUEST,
         )
     log_in(request, user.id)
-    return _redirect("/projects", request)
+    return _redirect(
+        "/account/password" if user.must_change_password else "/projects", request
+    )
 
 
 @router.post("/logout")
@@ -119,9 +126,75 @@ async def logout(
     return response
 
 
+@router.get("/account/password", response_class=HTMLResponse)
+async def password_page(
+    request: Request, session: Session = Depends(get_db)
+) -> Response:
+    user = current_active_user(request, session)
+    if user is None:
+        return _redirect("/login", request)
+    return _render(
+        request,
+        "auth/password.html",
+        {
+            "current_user": user,
+            "error": None,
+            "password_change_only": user.must_change_password,
+        },
+    )
+
+
+@router.post("/account/password", response_class=HTMLResponse)
+async def change_password(
+    request: Request,
+    current_password: Annotated[str, Form()],
+    new_password: Annotated[str, Form()],
+    new_password_confirmation: Annotated[str, Form()],
+    submitted_csrf_token: Annotated[str, Form(alias="csrf_token")] = "",
+    session: Session = Depends(get_db),
+) -> Response:
+    _csrf_or_403(request, submitted_csrf_token)
+    user = current_active_user(request, session)
+    if user is None:
+        return _redirect("/login", request)
+    user_id = user.id
+    if new_password != new_password_confirmation:
+        return _render(
+            request,
+            "auth/password.html",
+            {
+                "current_user": user,
+                "error": "새 비밀번호 확인이 일치하지 않습니다.",
+                "password_change_only": user.must_change_password,
+            },
+            status_code=status.HTTP_400_BAD_REQUEST,
+        )
+    try:
+        session.rollback()
+        change_own_password(
+            session,
+            user_id=user_id,
+            current_password=current_password,
+            new_password=new_password,
+        )
+    except UserManagementError as exc:
+        user = session.get(User, user_id)
+        return _render(
+            request,
+            "auth/password.html",
+            {
+                "current_user": user,
+                "error": str(exc),
+                "password_change_only": bool(user and user.must_change_password),
+            },
+            status_code=status.HTTP_400_BAD_REQUEST,
+        )
+    return _redirect("/projects", request)
+
+
 @router.get("/users", response_class=HTMLResponse)
 async def user_list(request: Request, session: Session = Depends(get_db)) -> Response:
-    admin = _require_admin(request, session)
+    admin = _require_super_admin(request, session)
     if isinstance(admin, RedirectResponse):
         return admin
     users = session.scalars(select(User).order_by(User.username)).all()
@@ -130,13 +203,19 @@ async def user_list(request: Request, session: Session = Depends(get_db)) -> Res
 
 @router.get("/users/new", response_class=HTMLResponse)
 async def new_user_page(request: Request, session: Session = Depends(get_db)) -> Response:
-    admin = _require_admin(request, session)
+    admin = _require_super_admin(request, session)
     if isinstance(admin, RedirectResponse):
         return admin
     return _render(
         request,
         "users/form.html",
-        {"mode": "create", "user": None, "error": None, "current_user": admin},
+        {
+            "mode": "create",
+            "user": None,
+            "error": None,
+            "current_user": admin,
+            "roles": list(UserRole),
+        },
     )
 
 
@@ -152,7 +231,7 @@ async def create_user_page(
     session: Session = Depends(get_db),
 ) -> Response:
     _csrf_or_403(request, submitted_csrf_token)
-    admin = _require_admin(request, session)
+    admin = _require_super_admin(request, session)
     if isinstance(admin, RedirectResponse):
         return admin
     if password != password_confirmation:
@@ -165,6 +244,7 @@ async def create_user_page(
                 "error": "비밀번호 확인이 일치하지 않습니다.",
                 "current_user": admin,
                 "submitted": {"username": username, "role": role, "is_active": is_active},
+                "roles": list(UserRole),
             },
             status_code=status.HTTP_400_BAD_REQUEST,
         )
@@ -188,6 +268,7 @@ async def create_user_page(
                 "error": str(exc),
                 "current_user": admin,
                 "submitted": {"username": username, "role": role, "is_active": is_active},
+                "roles": list(UserRole),
             },
             status_code=status.HTTP_400_BAD_REQUEST,
         )
@@ -198,7 +279,7 @@ async def create_user_page(
 async def edit_user_page(
     user_id: int, request: Request, session: Session = Depends(get_db)
 ) -> Response:
-    admin = _require_admin(request, session)
+    admin = _require_super_admin(request, session)
     if isinstance(admin, RedirectResponse):
         return admin
     user = session.get(User, user_id)
@@ -207,7 +288,13 @@ async def edit_user_page(
     return _render(
         request,
         "users/form.html",
-        {"mode": "edit", "user": user, "error": None, "current_user": admin},
+        {
+            "mode": "edit",
+            "user": user,
+            "error": None,
+            "current_user": admin,
+            "roles": list(UserRole),
+        },
     )
 
 
@@ -221,7 +308,7 @@ async def edit_user(
     session: Session = Depends(get_db),
 ) -> Response:
     _csrf_or_403(request, submitted_csrf_token)
-    admin = _require_admin(request, session)
+    admin = _require_super_admin(request, session)
     if isinstance(admin, RedirectResponse):
         return admin
     user = session.get(User, user_id)
@@ -241,7 +328,13 @@ async def edit_user(
         return _render(
             request,
             "users/form.html",
-            {"mode": "edit", "user": user, "error": str(exc), "current_user": admin},
+            {
+                "mode": "edit",
+                "user": user,
+                "error": str(exc),
+                "current_user": admin,
+                "roles": list(UserRole),
+            },
             status_code=status.HTTP_400_BAD_REQUEST,
         )
     return _redirect("/users", request)
@@ -255,7 +348,7 @@ async def toggle_active(
     session: Session = Depends(get_db),
 ) -> RedirectResponse:
     _csrf_or_403(request, submitted_csrf_token)
-    admin = _require_admin(request, session)
+    admin = _require_super_admin(request, session)
     if isinstance(admin, RedirectResponse):
         return admin
     try:
@@ -264,40 +357,4 @@ async def toggle_active(
         toggle_user_active(session, target_user_id=user_id, actor_user_id=actor_user_id)
     except UserManagementError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
-    return _redirect("/users", request)
-
-
-@router.post("/users/{user_id}/reset-password", response_class=HTMLResponse)
-async def reset_user_password(
-    user_id: int,
-    request: Request,
-    password: Annotated[str, Form()],
-    password_confirmation: Annotated[str, Form()],
-    submitted_csrf_token: Annotated[str, Form(alias="csrf_token")] = "",
-    session: Session = Depends(get_db),
-) -> Response:
-    _csrf_or_403(request, submitted_csrf_token)
-    admin = _require_admin(request, session)
-    if isinstance(admin, RedirectResponse):
-        return admin
-    user = session.get(User, user_id)
-    if user is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
-    if password != password_confirmation:
-        return _render(
-            request,
-            "users/form.html",
-            {"mode": "edit", "user": user, "error": "비밀번호 확인이 일치하지 않습니다.", "current_user": admin},
-            status_code=status.HTTP_400_BAD_REQUEST,
-        )
-    try:
-        session.rollback()
-        reset_password(session, target_user_id=user_id, password=password)
-    except UserManagementError as exc:
-        return _render(
-            request,
-            "users/form.html",
-            {"mode": "edit", "user": user, "error": str(exc), "current_user": admin},
-            status_code=status.HTTP_400_BAD_REQUEST,
-        )
     return _redirect("/users", request)

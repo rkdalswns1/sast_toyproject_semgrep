@@ -48,7 +48,13 @@ def _vulnerable_zip() -> bytes:
     return archive_bytes.getvalue()
 
 
-async def _login(client: AsyncClient, username: str, password: str) -> None:
+async def _login(
+    client: AsyncClient,
+    username: str,
+    password: str,
+    *,
+    new_password: str | None = None,
+) -> None:
     login_page = await client.get("/login")
     response = await client.post(
         "/login",
@@ -59,6 +65,20 @@ async def _login(client: AsyncClient, username: str, password: str) -> None:
         },
     )
     assert response.status_code == 303
+    if response.headers["location"] == "/account/password":
+        assert new_password is not None
+        password_page = await client.get("/account/password")
+        changed = await client.post(
+            "/account/password",
+            data={
+                "current_password": password,
+                "new_password": new_password,
+                "new_password_confirmation": new_password,
+                "csrf_token": _csrf_token(password_page.text),
+            },
+        )
+        assert changed.status_code == 303
+        assert changed.headers["location"] == "/projects"
 
 
 def test_authenticated_upload_analysis_findings_and_access_boundaries(tmp_path: Path) -> None:
@@ -93,7 +113,7 @@ def test_authenticated_upload_analysis_findings_and_access_boundaries(tmp_path: 
                             "username": username,
                             "password": "member-password" if username.startswith("member") else "outsider-password",
                             "password_confirmation": "member-password" if username.startswith("member") else "outsider-password",
-                            "role": "USER",
+                            "role": "PROJECT_MANAGER" if username.startswith("member") else "USER",
                             "is_active": "true",
                             "csrf_token": _csrf_token(user_form.text),
                         },
@@ -172,31 +192,38 @@ def test_authenticated_upload_analysis_findings_and_access_boundaries(tmp_path: 
             async with AsyncClient(
                 transport=transport, base_url="http://testserver", follow_redirects=False
             ) as member_client:
-                await _login(member_client, "member@company.com", "member-password")
+                await _login(
+                    member_client,
+                    "member@company.com",
+                    "member-password",
+                    new_password="member-personal-password",
+                )
                 member_projects = await member_client.get("/projects")
                 member_project = await member_client.get(f"/projects/{project_id}")
                 assert member_project.status_code == 200
-                assert "ZIP 소스 업로드" not in member_project.text
-                assert "Semgrep 분석 실행" not in member_project.text
-                denied_analysis = await member_client.post(
-                    f"/projects/{project_id}/analysis",
-                    data={"csrf_token": _csrf_token(member_projects.text)},
-                )
-                assert denied_analysis.status_code == 403
+                assert "ZIP 소스 업로드" in member_project.text
+                assert "Semgrep 분석 실행" in member_project.text
+                assert (await member_client.get(f"/projects/{project_id}/edit")).status_code == 200
+                assert (await member_client.get(f"/projects/{project_id}/users")).status_code == 200
+                assert (await member_client.get("/projects/new")).status_code == 403
+                assert (await member_client.get("/users")).status_code == 403
+                assert (await member_client.get("/rules/new")).status_code == 403
                 assert (await member_client.get(f"/analysis/{analysis_id}")).status_code == 200
                 assert (await member_client.get(f"/analysis/{analysis_id}/findings")).status_code == 200
                 assert (await member_client.get(f"/findings/{finding_id}")).status_code == 200
                 member_failure = await member_client.get(
                     f"/analysis/{failed_analysis_id}"
                 )
-                assert "private analyzer detail" not in member_failure.text
-                assert "관리자에게 문의" in member_failure.text
+                assert "private analyzer detail" in member_failure.text
 
             async with AsyncClient(
                 transport=transport, base_url="http://testserver", follow_redirects=False
             ) as outsider_client:
                 await _login(
-                    outsider_client, "outsider@company.com", "outsider-password"
+                    outsider_client,
+                    "outsider@company.com",
+                    "outsider-password",
+                    new_password="outsider-personal-password",
                 )
                 assert (await outsider_client.get(f"/projects/{project_id}")).status_code == 404
                 assert (await outsider_client.get(f"/analysis/{analysis_id}")).status_code == 404

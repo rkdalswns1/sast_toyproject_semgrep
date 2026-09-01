@@ -4,7 +4,7 @@
 
 ### users
 
-`id` PK, `username` UNIQUE NOT NULL, `password_hash` NOT NULL, `role` NOT NULL, `is_active` NOT NULL, `created_at`, `updated_at`. `username`에는 정규화된 사내 이메일 계정 식별자를 저장한다.
+`id` PK, `username` UNIQUE NOT NULL, `password_hash` NOT NULL, `role` NOT NULL, `is_active` NOT NULL, `must_change_password` NOT NULL, `created_at`, `updated_at`. `username`에는 정규화된 사내 이메일 계정 식별자를 저장한다. 신규 계정은 `must_change_password=true`, 기존 계정 마이그레이션은 `false`로 저장한다.
 
 ### projects
 
@@ -68,6 +68,7 @@ DiagnosticRule은 카탈로그의 공식 ID·명칭을 복제하지 않는다. �
 - 마이그레이션 실패 시 해당 버전을 기록하지 않는다.
 - 버전 4는 기존 DB에서 새로 구현된 경로 조작, XSS, 위험한 파일 업로드, XXE 카탈로그 행의 구현 상태·지원 언어·대표 Semgrep Rule ID를 동기화한다. 관리자가 변경한 카탈로그 활성 상태는 보존한다.
 - 버전 5는 기존 Finding의 `raw_result.path`를 이미 정규화된 `file_path`와 동일한 소스 상대경로로 변경한다. 나머지 Semgrep 원본 필드는 유지한다.
+- 버전 6은 `users.role` 제약을 `SUPER_ADMIN`, `PROJECT_MANAGER`, `USER`로 교체하고 기존 `ADMIN`을 `SUPER_ADMIN`으로 변환하며 `must_change_password` 컬럼을 추가한다. 기존 사용자 관계와 식별자·해시·활성 상태·시각은 보존한다.
 
 ## Deletion Policy
 
