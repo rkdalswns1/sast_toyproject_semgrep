@@ -300,3 +300,22 @@ Finding 상세는 주요 CWE와 MITRE 공식 문서 링크, 매핑 확신 수준
 - SUPER_ADMIN만 규칙 매핑을 변경하고 프로젝트를 삭제할 수 있으며 모든 POST는 CSRF 검증됨
 - 프로젝트 삭제 확인 UI, DB 연쇄 삭제, 프로젝트 전용 소스 디렉터리 정리와 역할 제한이 검증됨
 - 전체 자동 테스트와 애플리케이션 기동 확인
+
+## Phase 20 — Public GitHub Source Import
+
+SUPER_ADMIN과 해당 프로젝트에 할당된 PROJECT_MANAGER는 ZIP 직접 업로드 외에 공개 GitHub 저장소 URL과 선택적인 ref를 입력해 최신 분석 소스를 가져올 수 있다. URL은 `https://github.com/{owner}/{repository}` 형식만 허용하며 사용자 정보, 포트, query, fragment와 추가 경로는 거부한다. 비공개 저장소, 인증 토큰, Git clone과 GitHub 이외의 호스트는 지원하지 않는다.
+
+GitHub REST API로 기본 branch 또는 입력 ref를 40자리 commit SHA로 먼저 확정하고, 해당 SHA의 zipball을 제한 시간과 `MAX_UPLOAD_BYTES` 안에서 내려받는다. redirect는 HTTPS 및 GitHub가 사용하는 허용 호스트만 따른다. 받은 파일은 기존 ZIP 서명·파일 수·크기·경로 탈출·링크·특수 파일·암호화 검사를 그대로 거친 뒤 프로젝트 소스로 교체한다.
+
+Project에는 최신 소스의 수집 방식, 저장소 URL, 요청 ref와 확정 commit SHA를 저장한다. AnalysisRun에는 이 값을 실행 시점 provenance로 복사하여 이후 소스 교체와 무관하게 분석 대상을 식별한다. 기존 ZIP 프로젝트는 `ZIP` 수집 방식으로 마이그레이션하고 GitHub 정보는 비워 둔다.
+
+완료조건:
+
+- 공개 GitHub 저장소의 기본 branch와 명시 ref를 immutable commit SHA로 확정해 수집함
+- 비 GitHub·HTTP·사용자 정보·포트·query·fragment·추가 경로 URL과 유효하지 않은 ref를 거부함
+- 다운로드 timeout·크기 제한과 redirect 호스트 제한을 적용함
+- 다운로드한 archive가 기존 안전한 ZIP 검증과 격리 저장 절차를 통과해야만 최신 소스로 교체됨
+- SUPER_ADMIN과 담당 PROJECT_MANAGER만 수집 가능하고 USER는 읽기 전용, 미할당 사용자는 404를 유지함
+- 프로젝트 상세과 분석 상세에서 저장소 URL·ref·commit을 확인하고 분석 이력에는 실행 시점 값이 보존됨
+- 비공개 저장소·토큰·Git clone을 추가하지 않음
+- DB 마이그레이션, 권한·실패 보존·전체 회귀 시험 및 애플리케이션 기동 확인

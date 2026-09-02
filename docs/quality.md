@@ -63,6 +63,7 @@ Semgrep 규칙은 `app/rules/semgrep/kisa-2021/` 아래에 KISA 진단 항목별
 - Project의 소스 요약은 최신 안전 추출 결과에서 결정적으로 계산하고 소스 경로·메타데이터와 함께 교체한다. 실패한 업로드는 기존 요약을 변경하지 않는다.
 - CSV와 PDF는 같은 불변 보고서 스냅샷을 사용하여 필드와 집계가 형식별로 달라지지 않게 한다. 보고서 생성은 분석 원본과 DB 상태를 변경하지 않는다.
 - Project 삭제 시 하위 AnalysisRun과 Finding은 함께 삭제하고, 참조 중인 사용자와 Rule 삭제는 FK 정책으로 제한한다.
+- GitHub 수집은 별도 분석 경로를 만들지 않고 archive 다운로드 이후 기존 ZIP 검증·요약·분석 흐름을 재사용한다.
 - SQLite 연결마다 FK 검사를 활성화하며 저장 트랜잭션이 실패하면 전체 변경을 rollback한다.
 
 ## Verification

@@ -36,14 +36,14 @@ uploads/
 ## Authorization Model
 
 - `SUPER_ADMIN`은 계정·규칙·프로젝트 생성과 모든 프로젝트 자원에 접근한다.
-- `PROJECT_MANAGER`는 `project_users`로 할당된 프로젝트의 정보 수정, 사용자 배정, ZIP 업로드, 분석 실행과 오류 원문 조회를 수행한다.
+- `PROJECT_MANAGER`는 `project_users`로 할당된 프로젝트의 정보 수정, 사용자 배정, ZIP 업로드 또는 공개 GitHub 소스 수집, 분석 실행과 오류 원문 조회를 수행한다.
 - `USER`는 `project_users`로 할당된 프로젝트의 분석 이력과 Finding을 읽기 전용으로 조회한다.
 - 신규 계정은 `must_change_password=true`로 생성하며 최초 로그인 후 본인이 현재 초기 비밀번호를 확인하고 새 비밀번호로 변경하기 전까지 다른 보호 기능에 접근하지 못한다.
 
 ## Analysis Flow
 
 ```text
-ZIP upload → safe extraction → source summary confirmation
+(ZIP upload 또는 public GitHub archive download) → safe extraction → source summary confirmation
 → registered-language detection → Semgrep
 → JSON result → normalizer → Finding persistence → result pages
 ```
@@ -81,7 +81,7 @@ Semgrep의 `--jobs`가 하나의 실행 내부에서 대상 파일을 병렬 처
 - 분석 시점에 활성화된 언어별 Rule ID·KISA ID·명칭·심각도 목록과 해당 목록의 SHA-256
 - 식별된 소스 언어
 - 실제 분석한 언어와 단일·통합 분석 모드
-- 분석 실행 시점의 소스 버전·배포 버전·설명
+- 분석 실행 시점의 소스 버전·배포 버전·설명과 수집 방식·저장소 URL·ref·commit SHA
 
 ## Database Initialization
 
@@ -101,4 +101,4 @@ Phase 3부터 FastAPI 의존성으로 요청마다 하나의 SQLAlchemy `Session
 
 ## Explicit Non-goals
 
-MVP에서는 React/Next.js, REST API 전용 구조, 비동기 Queue, Git 연계, 추가 SAST 엔진, Docker 도입을 구현하지 않는다.
+MVP에서는 React/Next.js, REST API 전용 구조, 비동기 Queue, Git clone·비공개 저장소 인증 연계, 추가 SAST 엔진, Docker 도입을 구현하지 않는다.

@@ -85,6 +85,8 @@ Phase 18 시험은 안전한 ZIP을 저장한 뒤 원본 파일명, 업로드 �
 
 Phase 19 시험은 활성 29개 Rule ID의 주요 CWE·확신 수준·조치 권고, CWE 형식 검증, 분석 시 Finding 스냅샷과 이후 규칙 변경 독립성을 확인한다. Finding 상세와 CSV/PDF의 CWE·권고를 확인하고 원본 JSON·절대경로 제외 정책을 회귀 검증한다. 프로젝트 삭제는 SUPER_ADMIN 버튼·확인 속성·CSRF, PROJECT_MANAGER·USER 403, DB 하위 데이터 연쇄 삭제와 계산된 프로젝트 소스 디렉터리 제거를 확인한다.
 
+Phase 20 시험은 공개 GitHub URL과 ref의 allowlist, 기본 branch·명시 ref의 commit SHA 확정, HTTPS redirect 허용 호스트, timeout·다운로드 크기, 수신 ZIP 재검증을 고정 응답으로 검증한다. SUPER_ADMIN과 담당 PROJECT_MANAGER만 수집할 수 있고 USER는 403, 미할당 사용자는 404인지 확인한다. 실패한 수집은 기존 Project 소스·메타데이터를 바꾸지 않고, 성공한 수집 정보가 새 AnalysisRun provenance에 복사되는지 확인한다.
+
 SFR-012 등록 시험은 SUPER_ADMIN의 KISA 항목·언어별 Semgrep Rule ID 등록과 수정, DB 지속성, PROJECT_MANAGER·USER 접근 차단 및 중복 Rule ID 거부를 검증한다. YAML의 문법과 탐지 동작은 실제 Semgrep 진단 예제 시험이 담당한다.
 
 ## Commands
@@ -127,3 +129,4 @@ RFP TST 핵심 시험:
 15. ZIP 저장 후 프로젝트 상세의 분석 전 소스 확인에서 파일명·업로드 시각·파일 수·크기·감지 언어·주요 상대경로를 확인하고, USER에게는 읽기 전용으로 같은 요약만 표시되는지 확인한다.
 16. 새 분석 Finding 상세와 CSV/PDF에서 CWE 번호·MITRE 링크·매핑 확신 수준·조치 권고를 확인하고, 규칙 관리에서 값을 수정해도 기존 Finding이 바뀌지 않는지 확인한다.
 17. SUPER_ADMIN으로 시험 프로젝트 상세의 빨간 삭제 버튼을 누르고 확인 창에서 취소·확인을 각각 시험한다. 삭제 후 프로젝트와 분석 이력·Finding·저장 소스가 제거되고 다른 역할에는 버튼이 없으며 직접 POST는 403인지 확인한다.
+18. 공개 GitHub 저장소 URL을 기본 branch와 명시 branch로 각각 가져와 프로젝트 상세의 URL·ref·commit을 확인한다. 해당 소스로 분석한 뒤 분석 상세에도 같은 실행 시점 정보가 보존되는지 확인하고 USER 화면에는 가져오기 폼이 없는지 확인한다.

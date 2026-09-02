@@ -52,6 +52,7 @@ class Settings:
     semgrep_max_target_bytes: int = 1_000_000
     max_semgrep_output_bytes: int = 20 * 1024 * 1024
     max_semgrep_error_bytes: int = 64 * 1024
+    github_download_timeout_seconds: int = 30
 
     def __post_init__(self) -> None:
         secret_size = len(self.session_secret.encode("utf-8"))
@@ -73,6 +74,7 @@ class Settings:
             "SEMGREP_MAX_TARGET_BYTES": self.semgrep_max_target_bytes,
             "MAX_SEMGREP_OUTPUT_BYTES": self.max_semgrep_output_bytes,
             "MAX_SEMGREP_ERROR_BYTES": self.max_semgrep_error_bytes,
+            "GITHUB_DOWNLOAD_TIMEOUT_SECONDS": self.github_download_timeout_seconds,
         }
         for name, value in positive_limits.items():
             if value <= 0:
@@ -116,5 +118,8 @@ class Settings:
             ),
             max_semgrep_error_bytes=_positive_int(
                 "MAX_SEMGREP_ERROR_BYTES", 64 * 1024
+            ),
+            github_download_timeout_seconds=_positive_int(
+                "GITHUB_DOWNLOAD_TIMEOUT_SECONDS", 30
             ),
         )

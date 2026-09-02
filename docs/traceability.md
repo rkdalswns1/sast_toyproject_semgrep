@@ -20,6 +20,7 @@ isolated upload directory; no test uses the developer's local project data.
 | Phase 17 Finding revalidation | Implemented | New-run comparison history, protected revalidation route and deterministic comparison tests |
 | Phase 18 source confirmation | Implemented | Safe-extraction source summary on project detail and persistence tests |
 | Phase 19 CWE guidance | Implemented | Rule-ID-level CWE mapping, Finding snapshots, detail/report output and SUPER_ADMIN project deletion |
+| Phase 20 public GitHub source | Implemented | Strict public GitHub URL/ref validation, immutable commit archive intake and shared ZIP security pipeline |
 
 ## Data Requirement Status
 
@@ -41,6 +42,7 @@ isolated upload directory; no test uses the developer's local project data.
 | DAR-014 | Implemented | FindingRevalidation stores source/new-run/matched Finding links, result, executor and timestamp |
 | DAR-015 | Implemented | Project JSON stores a bounded summary derived from the latest safely extracted source |
 | DAR-016 | Implemented | DiagnosticRule CWE/guidance data and immutable Finding snapshots with schema migration 14 |
+| DAR-017 | Implemented | Project source origin/repository/ref/commit fields and AnalysisRun provenance snapshot with schema migration 15 |
 
 ## Security Requirement Status
 
@@ -62,6 +64,7 @@ isolated upload directory; no test uses the developer's local project data.
 | SEC-014 | Implemented | Revalidation reuses project-operation authorization, CSRF and isolated Semgrep execution; USER remains read-only |
 | SEC-015 | Implemented | Source summary is generated after safe extraction and excludes content and absolute paths |
 | SEC-016 | Implemented | CSRF-protected SUPER_ADMIN project deletion uses a computed upload-root boundary |
+| SEC-017 | Implemented | Public HTTPS github.com allowlist, safe redirect hosts, timeout/size limits and existing ZIP validation reuse |
 
 ## Test Requirement Status
 
@@ -78,6 +81,7 @@ isolated upload directory; no test uses the developer's local project data.
 | TST-009 | Implemented | Revalidation comparison outcomes, history, permissions and unchanged workflow status in revalidation tests |
 | TST-010 | Implemented | Source summary persistence, bounded relative paths, language detection, UI and failed-replacement preservation tests |
 | TST-011 | Implemented | Exact CWE mappings, snapshots, reports, rule management and project deletion tests |
+| TST-012 | Implemented | GitHub URL/ref allowlist, commit resolution, redirects, size limit, role checks and persisted source identity tests |
 
 | Requirement group | Implementation | Automated verification |
 |---|---|---|
@@ -87,6 +91,7 @@ isolated upload directory; no test uses the developer's local project data.
 | SUPER_ADMIN user management, protected super-administrator state and self-service password changes | `app/auth/services.py`, `app/auth/routes.py` | `tests/test_authentication.py` |
 | Project CRUD, membership, and project visibility | `app/projects/services.py`, `app/projects/routes.py` | `tests/test_projects.py`, `tests/test_end_to_end.py` |
 | ZIP-only upload and safe extraction | `app/projects/upload.py` | `tests/test_source_upload.py` |
+| Public GitHub archive collection and shared safe extraction | `app/projects/github.py`, `app/analysis/routes.py` | `tests/test_github_source.py` |
 | ZIP Slip, symbolic link, path traversal, and size limits | `app/projects/upload.py` | `tests/test_source_upload.py` |
 | SUPER_ADMIN/assigned PROJECT_MANAGER source mutation and analysis; USER read-only results | `app/analysis/routes.py`, project/analysis templates | `tests/test_end_to_end.py` |
 | Semgrep per-run workspace isolation, minimal child environment, timeout, error status, JSON collection, and per-run provenance | `app/analysis/service.py` | `tests/test_analysis_execution.py` |

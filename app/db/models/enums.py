@@ -58,3 +58,8 @@ class Language(str, Enum):
 
 class SourceType(str, Enum):
     ZIP = "ZIP"
+
+
+class SourceOrigin(str, Enum):
+    ZIP = "ZIP"
+    GITHUB = "GITHUB"

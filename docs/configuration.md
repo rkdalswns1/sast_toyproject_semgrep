@@ -28,6 +28,7 @@ Phase 1에서 프로젝트 루트에 `.env.example`을 생성한다. 실제 `.en
 | `MAX_EXTRACTED_BYTES` | 아니요 | `104857600` | 압축 해제 후 최대 100 MiB |
 | `MAX_ARCHIVE_FILES` | 아니요 | `2000` | ZIP 내부 최대 파일 수 |
 | `MAX_SINGLE_FILE_BYTES` | 아니요 | `10485760` | 개별 파일 최대 10 MiB |
+| `GITHUB_DOWNLOAD_TIMEOUT_SECONDS` | 아니요 | `30` | 공개 GitHub API 및 archive 다운로드 제한 시간 |
 | `SEMGREP_TIMEOUT_SECONDS` | 아니요 | `60` | Semgrep 실행 제한 시간 |
 | `SEMGREP_JOBS` | 아니요 | `2` | Semgrep 동시 분석 작업 수 |
 | `SEMGREP_MAX_MEMORY_MB` | 아니요 | `1024` | Semgrep 규칙별 최대 메모리 MiB |
@@ -69,6 +70,7 @@ Confidence: LOW, MEDIUM, HIGH
 FindingStatus: OPEN, IN_PROGRESS, RESOLVED, FALSE_POSITIVE, ACCEPTED_RISK
 Language: JAVA, JAVASCRIPT, PYTHON
 SourceType: ZIP
+SourceOrigin: ZIP, GITHUB
 ```
 
 Python에서는 `str, Enum`을 상속한 Enum으로 정의한다. SQLAlchemy 모델, 폼 검증, 필터 및 테스트는 동일한 Enum 정의를 사용한다.
@@ -90,6 +92,8 @@ Finding 재검증 결과는 `STILL_DETECTED`, `LIKELY_RESOLVED`, `REVIEW_REQUIRE
 ZIP 소스 메타데이터는 모두 선택 입력이다. `source_version`과 `deployment_version`은 앞뒤 공백을 제거해 각각 최대 100자, `source_description`은 최대 2,000자로 저장한다. 공백만 입력한 값은 `NULL`로 처리한다.
 
 ZIP 소스 요약의 원본 파일명은 경로 성분을 제거해 최대 255자로 저장한다. 실제 압축 해제된 정규 파일의 소스 상대경로는 정렬한 뒤 최대 20개만 저장하며 파일 내용과 시스템 절대경로는 저장하지 않는다.
+
+GitHub 저장소 URL은 `https://github.com/{owner}/{repository}`만 허용한다. ref는 선택 입력이며 최대 255자이고 공백·제어문자와 위험한 Git ref 패턴을 허용하지 않는다. 저장소 URL, 요청 ref와 GitHub API로 확정한 40자리 commit SHA만 저장하며 토큰·쿠키 등 인증정보는 받거나 저장하지 않는다.
 
 ## Bootstrap Super Administrator
 

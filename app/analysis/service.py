@@ -428,6 +428,10 @@ def execute_project_analysis(
         "source_version": project.source_version,
         "deployment_version": project.deployment_version,
         "description": project.source_description,
+        "source_origin": project.source_origin.value,
+        "repository_url": project.repository_url,
+        "repository_ref": project.repository_ref,
+        "repository_commit": project.repository_commit,
     }
     session.rollback()
 

@@ -39,9 +39,12 @@ POST /projects/{project_id}/edit
 GET  /projects/{project_id}/users
 POST /projects/{project_id}/users
 POST /projects/{project_id}/delete
+POST /projects/{project_id}/github-source
 ```
 
 프로젝트 삭제 POST는 SUPER_ADMIN 전용이며 CSRF 토큰과 브라우저 확인 절차를 사용한다. PROJECT_MANAGER와 USER의 직접 요청은 `403`으로 처리한다.
+
+GitHub 소스 수집 POST는 공개 저장소 URL, 선택 ref와 소스 메타데이터를 받는다. SUPER_ADMIN 또는 해당 프로젝트에 할당된 PROJECT_MANAGER만 사용할 수 있으며 USER는 `403`, 미할당 사용자는 `404`로 처리한다.
 
 ## Analysis
 

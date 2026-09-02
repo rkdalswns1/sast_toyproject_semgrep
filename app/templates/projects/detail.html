@@ -11,12 +11,23 @@
   <section class="card metadata-grid">
     <div><span>기준 언어</span><strong>{{ project.language.value }}</strong></div>
     <div><span>분석 모드</span><strong>{{ "지원 언어 자동 감지" if project.scan_all_languages else "단일 언어" }}</strong></div>
-    <div><span>소스 유형</span><strong>{{ project.source_type.value }}</strong></div>
+    <div><span>소스 형식</span><strong>{{ project.source_type.value }}</strong></div>
+    <div><span>수집 방식</span><strong>{{ project.source_origin.value }}</strong></div>
     <div><span>소스 버전</span><strong>{{ project.source_version or '-' }}</strong></div>
     <div><span>배포 버전</span><strong>{{ project.deployment_version or '-' }}</strong></div>
     <div><span>생성자</span><strong>{{ project.creator.username }}</strong></div>
     <div><span>생성 일시</span><strong>{{ project.created_at.strftime('%Y-%m-%d %H:%M') }}</strong></div>
   </section>
+  {% if project.source_origin.value == 'GITHUB' %}
+  <section class="card top-gap">
+    <h2>GitHub 소스 정보</h2>
+    <div class="metadata-grid">
+      <div><span>공개 저장소</span><strong><a href="{{ project.repository_url }}" target="_blank" rel="noopener noreferrer">{{ project.repository_url }}</a></strong></div>
+      <div><span>요청 ref</span><strong>{{ project.repository_ref or '기본 branch' }}</strong></div>
+      <div><span>확정 commit</span><strong><code>{{ project.repository_commit }}</code></strong></div>
+    </div>
+  </section>
+  {% endif %}
   {% if project.source_description %}<section class="card top-gap"><h2>현재 소스 설명</h2><p>{{ project.source_description }}</p></section>{% endif %}
   {% if project.source_summary %}
   {% set source_summary = project.source_summary %}
@@ -26,7 +37,7 @@
       <span class="badge">분석 준비됨</span>
     </div>
     <div class="metadata-grid source-summary-grid">
-      <div><span>ZIP 파일명</span><strong>{{ source_summary.archive_name }}</strong></div>
+      <div><span>수집 파일명</span><strong>{{ source_summary.archive_name }}</strong></div>
       <div><span>업로드 시각</span><strong>{{ source_summary.uploaded_at[:19].replace('T', ' ') }} UTC</strong></div>
       <div><span>실제 파일 수</span><strong>{{ source_summary.file_count }}개</strong></div>
       <div><span>압축 해제 크기</span><strong>{{ source_summary.total_bytes }} bytes</strong></div>
@@ -64,6 +75,20 @@
     </form>
     <p class="muted"><a href="/projects/{{ project.id }}/analysis">분석 실행 이력 보기</a></p>
     {% endif %}
+  </section>
+  <section class="card top-gap">
+    <h2>공개 GitHub 소스 가져오기</h2>
+    <p class="muted">공개 github.com 저장소만 지원합니다. 토큰이나 비밀번호는 입력하지 않습니다. 가져온 archive도 ZIP과 같은 보안 검사를 통과해야 저장됩니다.</p>
+    {% if github_error %}<p class="alert error">{{ github_error }}</p>{% endif %}
+    <form method="post" action="/projects/{{ project.id }}/github-source" class="form-stack">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <label>GitHub 저장소 URL<input type="url" name="repository_url" maxlength="500" required value="{{ submitted_github_metadata.repository_url if submitted_github_metadata is defined else (project.repository_url or '') }}" placeholder="https://github.com/owner/repository"></label>
+      <label>Branch, tag 또는 commit SHA (선택)<input type="text" name="repository_ref" maxlength="255" value="{{ submitted_github_metadata.repository_ref if submitted_github_metadata is defined else '' }}" placeholder="비우면 기본 branch"></label>
+      <label>소스 버전<input type="text" name="source_version" maxlength="100" value="{{ submitted_github_metadata.source_version if submitted_github_metadata is defined else (project.source_version or '') }}" placeholder="예: 1.4.0"></label>
+      <label>배포 버전<input type="text" name="deployment_version" maxlength="100" value="{{ submitted_github_metadata.deployment_version if submitted_github_metadata is defined else (project.deployment_version or '') }}" placeholder="예: release-2026.09"></label>
+      <label>소스 설명<textarea name="source_description" rows="4" maxlength="2000" placeholder="분석 대상과 변경 사항을 입력하세요.">{{ submitted_github_metadata.source_description if submitted_github_metadata is defined else (project.source_description or '') }}</textarea></label>
+      <button type="submit">GitHub 소스 가져오기</button>
+    </form>
   </section>
   {% elif project.source_path %}
   <section class="card top-gap">

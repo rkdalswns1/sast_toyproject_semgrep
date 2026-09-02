@@ -357,6 +357,10 @@ def test_authenticated_upload_analysis_findings_and_access_boundaries(tmp_path: 
             "source_version": "source-v1",
             "deployment_version": "deploy-v1",
             "description": "첫 번째 분석 대상",
+            "source_origin": "ZIP",
+            "repository_url": None,
+            "repository_ref": None,
+            "repository_commit": None,
         }
         assert len(analysis_run.summary["provenance"]["active_rules"]) == 10
         assert len(analysis_run.summary["provenance"]["active_rules_sha256"]) == 64

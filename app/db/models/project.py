@@ -8,7 +8,7 @@ from sqlalchemy import JSON, Boolean, ForeignKey, String, Text, false
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
-from app.db.models.enums import Language, SourceType
+from app.db.models.enums import Language, SourceOrigin, SourceType
 from app.db.models.mixins import TimestampMixin
 from app.db.models.types import persisted_enum
 
@@ -26,6 +26,15 @@ class Project(TimestampMixin, Base):
     source_type: Mapped[SourceType] = mapped_column(
         persisted_enum(SourceType, "source_type"), nullable=False
     )
+    source_origin: Mapped[SourceOrigin] = mapped_column(
+        persisted_enum(SourceOrigin, "source_origin"),
+        nullable=False,
+        default=SourceOrigin.ZIP,
+        server_default=SourceOrigin.ZIP.value,
+    )
+    repository_url: Mapped[str | None] = mapped_column(String(500))
+    repository_ref: Mapped[str | None] = mapped_column(String(255))
+    repository_commit: Mapped[str | None] = mapped_column(String(40))
     language: Mapped[Language] = mapped_column(
         persisted_enum(Language, "project_language"), nullable=False
     )

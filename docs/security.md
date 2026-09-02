@@ -79,3 +79,11 @@ Critical 또는 High 취약점은 배포를 중단하고 수정 버전으로 갱
 - 운영 환경은 `APP_ENV=production`으로 실행하여 세션 쿠키에 `Secure`를 적용한다.
 - Dependabot 경고와 보류 중인 High/Critical 취약점이 없는지 확인한다.
 - 전체 테스트와 실제 Semgrep 분석을 통과한 커밋만 배포한다.
+
+## Public GitHub Source Boundary
+
+- 입력은 인증정보가 없는 `https://github.com/{owner}/{repository}` 공개 저장소 URL만 허용한다.
+- GitHub API가 확정한 commit SHA의 archive만 내려받고 HTTPS `api.github.com`, `codeload.github.com` redirect만 따른다.
+- API와 archive 다운로드에 30초 기본 timeout을 적용하고 archive는 `MAX_UPLOAD_BYTES`를 넘기기 전에 중단한다.
+- 내려받은 데이터는 기존 ZIP 검증·격리 절차를 모두 통과해야 프로젝트 최신 소스로 교체한다.
+- 토큰·쿠키·비밀번호, Git clone, private repository는 Phase 20 범위에서 입력하거나 저장하지 않는다.

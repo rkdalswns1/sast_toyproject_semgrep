@@ -17,6 +17,7 @@ Java, JavaScript, Python 소스 코드를 대상으로 정적 애플리케이션
 - 프로젝트 생성·수정·조회
 - 프로젝트별 사용자 권한 관리
 - SUPER_ADMIN 또는 할당된 PROJECT_MANAGER의 ZIP 소스 업로드
+- SUPER_ADMIN 또는 할당된 PROJECT_MANAGER의 공개 GitHub 저장소 URL 소스 수집
 - ZIP 업로드별 최신 소스 버전, 배포 버전과 설명 입력 및 분석 시점 스냅샷 보존
 - 안전한 압축 해제 후 최신 ZIP의 파일명·업로드 시각·파일 수·전체 크기·감지 언어·주요 상대경로를 분석 전에 확인
 - 중앙 language registry 기반 Java, JavaScript, Python 언어 식별 및 확장 구조
@@ -59,6 +60,7 @@ Java, JavaScript, Python 소스 코드를 대상으로 정적 애플리케이션
 - DAR-014: 재검증의 원본 Finding, 새 분석 실행, 일치 Finding, 비교 결과, 실행 계정과 실행 시각을 이력으로 저장한다.
 - DAR-015: 프로젝트의 최신 ZIP에 대해 안전한 압축 해제 결과로 계산한 제한된 소스 요약을 JSON으로 저장한다.
 - DAR-016: DiagnosticRule의 주요 CWE·관련 CWE·매핑 확신 수준·조치 권고를 저장하고 Finding에는 분석 시점 값을 스냅샷으로 보존한다.
+- DAR-017: 프로젝트의 최신 소스 수집 방식과 공개 GitHub 저장소 URL·요청 ref·확정 commit SHA를 저장하고 분석 실행 요약에는 실행 시점 값을 보존한다.
 
 ## Security Requirements
 
@@ -78,6 +80,7 @@ Java, JavaScript, Python 소스 코드를 대상으로 정적 애플리케이션
 - SEC-014: Finding 재검증 실행은 SUPER_ADMIN 또는 해당 프로젝트에 할당된 PROJECT_MANAGER로 제한하고 USER는 재검증 이력을 읽기 전용으로 조회한다.
 - SEC-015: 소스 요약은 ZIP 전체 검증 후 실제 정규 파일만 사용해 계산하고 파일 내용·시스템 절대경로를 저장하거나 표시하지 않는다.
 - SEC-016: 프로젝트 삭제는 SUPER_ADMIN의 CSRF 보호 요청으로 제한하고 DB의 저장 경로 대신 업로드 루트와 프로젝트 ID로 계산한 전용 경로만 제거한다.
+- SEC-017: GitHub 소스 수집은 HTTPS 공개 github.com 저장소로 제한하고 URL·ref·redirect 호스트, 다운로드 시간·크기와 수신 ZIP을 검증하며 인증정보를 입력·저장하지 않는다.
 
 최초 최고 관리자 계정은 `admin@company.com` / `admin`이며 비밀번호는 bcrypt 해시로만 저장한다. 최고 관리자는 자기 자신과 마지막 활성 SUPER_ADMIN을 비활성화하거나 다른 역할로 변경할 수 없다. SUPER_ADMIN이 UI에서 생성한 신규 사용자는 개인 비밀번호를 변경하기 전까지 비밀번호 변경과 로그아웃 외의 보호 기능을 사용할 수 없다. 로그인·로그아웃을 포함한 상태 변경 요청은 CSRF 토큰으로 보호한다. 구체적인 인증, 제한값 및 외부 구성요소 정책은 `configuration.md`와 `security.md`를 따른다.
 
@@ -94,6 +97,7 @@ Java, JavaScript, Python 소스 코드를 대상으로 정적 애플리케이션
 - TST-009: 재검증의 동일 위치 재탐지·위치 변경·미탐지·분석 실패 비교와 실행 권한, 이력 보존 및 조치 상태 불변을 검증한다.
 - TST-010: 안전한 ZIP의 실제 소스 요약 저장·조회, 상대경로·언어 감지·표시 제한과 실패한 교체 시 기존 요약 보존을 검증한다.
 - TST-011: 승인된 29개 CWE 매핑, 기존 DB·Finding 마이그레이션, Finding 스냅샷, 상세·CSV·PDF 표시, 규칙 관리 검증과 SUPER_ADMIN 전용 프로젝트 삭제를 검증한다.
+- TST-012: 공개 GitHub URL·ref·commit 확정·redirect·다운로드 제한·ZIP 검증·실패 시 기존 소스 보존과 역할별 접근 제어를 검증한다.
 
 시험 데이터, 기대 결과 및 TST별 자동·수동 검증 절차는 `testing.md`를 따른다.
 

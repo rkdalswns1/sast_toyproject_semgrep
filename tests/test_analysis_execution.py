@@ -141,6 +141,10 @@ def test_successful_semgrep_run_collects_json_and_cleans_workspace(tmp_path: Pat
         "source_version": "source-2.0.0",
         "deployment_version": "deploy-42",
         "description": "분석 실행 시점 설명",
+        "source_origin": "ZIP",
+        "repository_url": None,
+        "repository_ref": None,
+        "repository_commit": None,
     }
     assert len(provenance["source_sha256"]) == 64
     assert len(provenance["ruleset_sha256"]) == 64

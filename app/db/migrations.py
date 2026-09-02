@@ -425,6 +425,27 @@ def _add_cwe_mapping_and_finding_snapshots(connection: Connection) -> None:
         )
 
 
+def _add_public_github_source_metadata(connection: Connection) -> None:
+    """Add latest source origin and immutable GitHub identity fields."""
+    columns = {
+        column["name"] for column in inspect(connection).get_columns("projects")
+    }
+    additions = {
+        "source_origin": "VARCHAR(6) NOT NULL DEFAULT 'ZIP'",
+        "repository_url": "VARCHAR(500)",
+        "repository_ref": "VARCHAR(255)",
+        "repository_commit": "VARCHAR(40)",
+    }
+    for column_name, column_type in additions.items():
+        if column_name not in columns:
+            connection.execute(
+                text(
+                    f"ALTER TABLE projects ADD COLUMN "
+                    f"{column_name} {column_type}"
+                )
+            )
+
+
 SCHEMA_MIGRATIONS: tuple[SchemaMigration, ...] = (
     SchemaMigration(1, "Initial SAST domain schema baseline", _record_initial_schema),
     SchemaMigration(
@@ -492,6 +513,11 @@ SCHEMA_MIGRATIONS: tuple[SchemaMigration, ...] = (
         14,
         "Add CWE mappings and immutable Finding snapshots",
         _add_cwe_mapping_and_finding_snapshots,
+    ),
+    SchemaMigration(
+        15,
+        "Add public GitHub source identity to projects",
+        _add_public_github_source_metadata,
     ),
 )
 

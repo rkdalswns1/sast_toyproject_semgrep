@@ -8,7 +8,7 @@
 
 ### projects
 
-`id` PK, `name` NOT NULL, `description`, `source_type` NOT NULL, `language` NOT NULL, `scan_all_languages` NOT NULL, `source_path` NOT NULL, `source_version`, `deployment_version`, `source_description`, `source_summary` JSON, `created_by` FK users.id, `created_at`, `updated_at`. `language`은 기준 언어이며 `scan_all_languages=true`이면 ZIP에서 감지된 모든 지원 언어를 함께 분석한다. 세 소스 메타데이터 컬럼과 `source_summary`는 현재 프로젝트가 가리키는 최신 ZIP을 설명한다. 요약은 경로 성분을 제거한 원본 파일명, 업로드 시각, 실제 정규 파일 수·바이트, 중앙 registry로 감지한 언어와 최대 20개의 상대 파일 경로만 저장한다.
+`id` PK, `name` NOT NULL, `description`, `source_type` NOT NULL, `source_origin` NOT NULL, `repository_url`, `repository_ref`, `repository_commit`, `language` NOT NULL, `scan_all_languages` NOT NULL, `source_path` NOT NULL, `source_version`, `deployment_version`, `source_description`, `source_summary` JSON, `created_by` FK users.id, `created_at`, `updated_at`. `source_type`은 분석 입력 archive 형식인 `ZIP`을 유지하고 `source_origin`은 사용자가 직접 올린 `ZIP` 또는 공개 `GITHUB` 수집을 구분한다. GitHub 컬럼은 최신 저장소 URL·요청 ref·확정 commit SHA를 저장하며 ZIP 직접 업로드 시 비워 둔다. `language`은 기준 언어이며 `scan_all_languages=true`이면 안전하게 압축 해제된 소스에서 감지된 모든 지원 언어를 함께 분석한다.
 
 ### project_users
 
@@ -97,6 +97,7 @@ DiagnosticRule은 카탈로그의 공식 ID·명칭을 복제하지 않는다. �
 - 버전 12는 `finding_revalidations` 테이블과 FK·고유 제약을 생성한다. 기존 Finding과 조치 상태는 변경하지 않는다.
 - 버전 13은 `projects`에 nullable JSON `source_summary`를 추가한다. 기존 프로젝트는 요약이 없는 상태로 유지하며 다음 ZIP 업로드 성공 시 생성한다.
 - 버전 14는 `diagnostic_rules`와 `findings`에 CWE 필드를 추가하고 DiagnosticRule에 조치 권고를 추가한다. 승인된 29개 Rule ID를 seed하고 기존 Finding은 원본 결과의 Rule ID가 정확히 일치할 때만 CWE 스냅샷을 채운다.
+- 버전 15는 `projects`에 `source_origin`, `repository_url`, `repository_ref`, `repository_commit`을 추가한다. 기존 프로젝트는 `source_origin=ZIP`이고 GitHub 식별 정보는 없는 상태로 유지한다.
 
 ## Deletion Policy
 

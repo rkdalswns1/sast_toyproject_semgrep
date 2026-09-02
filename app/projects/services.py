@@ -10,7 +10,7 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.db.models.enums import Language, SourceType
+from app.db.models.enums import Language, SourceOrigin, SourceType
 from app.db.models.project import Project, ProjectUser
 from app.db.models.user import User
 
@@ -70,6 +70,7 @@ def create_project(
         name=normalized_name,
         description=description.strip() or None if description else None,
         source_type=SourceType.ZIP,
+        source_origin=SourceOrigin.ZIP,
         language=language,
         scan_all_languages=scan_all_languages,
         source_path="",
@@ -141,6 +142,10 @@ def update_project_source(
     deployment_version: str | None = None,
     source_description: str | None = None,
     source_summary: dict[str, Any] | None = None,
+    source_origin: SourceOrigin = SourceOrigin.ZIP,
+    repository_url: str | None = None,
+    repository_ref: str | None = None,
+    repository_commit: str | None = None,
 ) -> None:
     """Persist only a workspace path created by the upload service."""
     normalized_metadata = normalize_source_metadata(
@@ -154,6 +159,10 @@ def update_project_source(
             raise ProjectManagementError("프로젝트를 찾을 수 없습니다.")
         project.source_path = str(source_path)
         project.source_summary = source_summary
+        project.source_origin = source_origin
+        project.repository_url = repository_url
+        project.repository_ref = repository_ref
+        project.repository_commit = repository_commit
         (
             project.source_version,
             project.deployment_version,

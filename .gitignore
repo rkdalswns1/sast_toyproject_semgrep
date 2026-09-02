@@ -46,6 +46,9 @@ work/
 
 # Local migration and test artifacts
 .tmp/
+manual-test/
+test_vulnerable.py
+test_vulnerable.zip
 db.zip
 path1/
 path1.zip

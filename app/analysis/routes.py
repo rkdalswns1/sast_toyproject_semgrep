@@ -17,6 +17,7 @@ from app.auth.dependencies import can_operate_project, current_active_user, get_
 from app.auth.session import csrf_is_valid, csrf_token, persist_session
 from app.db.models.analysis_run import AnalysisRun
 from app.db.models.finding import Finding
+from app.db.models.enums import SourceOrigin
 from app.db.models.user import User
 from app.projects.access import accessible_project_or_404
 from app.projects.services import (
@@ -25,6 +26,7 @@ from app.projects.services import (
     update_project_source,
 )
 from app.projects.upload import SourceUploadError, save_project_source
+from app.projects.github import GitHubSourceError, collect_github_project_source
 
 
 router = APIRouter()
@@ -63,6 +65,78 @@ def _csrf_or_403(request: Request, submitted_token: str) -> None:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN, detail="Invalid CSRF token"
         )
+
+
+@router.post("/projects/{project_id}/github-source", response_class=HTMLResponse)
+async def import_public_github_source(
+    project_id: int,
+    request: Request,
+    repository_url: Annotated[str, Form()] = "",
+    repository_ref: Annotated[str, Form()] = "",
+    source_version: Annotated[str, Form()] = "",
+    deployment_version: Annotated[str, Form()] = "",
+    source_description: Annotated[str, Form()] = "",
+    submitted_csrf_token: Annotated[str, Form(alias="csrf_token")] = "",
+    session: Session = Depends(get_db),
+) -> Response:
+    """Replace the latest source with a safely collected public GitHub archive."""
+    _csrf_or_403(request, submitted_csrf_token)
+    user = _require_user(request, session)
+    if isinstance(user, RedirectResponse):
+        return user
+    project = accessible_project_or_404(session, project_id, user)
+    if not can_operate_project(user):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN)
+
+    submitted = {
+        "repository_url": repository_url,
+        "repository_ref": repository_ref,
+        "source_version": source_version,
+        "deployment_version": deployment_version,
+        "source_description": source_description,
+    }
+    try:
+        normalized_metadata = normalize_source_metadata(
+            source_version=source_version,
+            deployment_version=deployment_version,
+            source_description=source_description,
+        )
+        collected = await collect_github_project_source(
+            repository_url,
+            repository_ref,
+            project_id=project.id,
+            settings=request.app.state.settings,
+        )
+        session.rollback()
+        update_project_source(
+            session,
+            project_id=project_id,
+            source_path=collected.stored_source.path,
+            source_version=normalized_metadata[0],
+            deployment_version=normalized_metadata[1],
+            source_description=normalized_metadata[2],
+            source_summary=collected.stored_source.summary,
+            source_origin=SourceOrigin.GITHUB,
+            repository_url=collected.repository_url,
+            repository_ref=collected.requested_ref,
+            repository_commit=collected.commit_sha,
+        )
+    except (ProjectManagementError, GitHubSourceError) as exc:
+        return _render(
+            request,
+            "projects/detail.html",
+            {
+                "project": project,
+                "current_user": user,
+                "can_manage_project": True,
+                "upload_error": None,
+                "github_error": str(exc),
+                "analysis_error": None,
+                "submitted_github_metadata": submitted,
+            },
+            status_code=status.HTTP_400_BAD_REQUEST,
+        )
+    return _redirect(f"/projects/{project_id}", request)
 
 
 @router.post("/projects/{project_id}/analysis", response_class=HTMLResponse)
