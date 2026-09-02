@@ -19,15 +19,21 @@
       <label>조치 상태
         <select name="status"><option value="">전체</option>{% for value in status_values %}<option value="{{ value.value }}" {% if selected_status == value %}selected{% endif %}>{{ status_labels[value] }}</option>{% endfor %}</select>
       </label>
+      <label>담당자
+        <select name="assignee_id"><option value="">전체</option>{% for user in project_users %}<option value="{{ user.id }}" {% if selected_assignee_id == user.id %}selected{% endif %}>{{ user.username }}</option>{% endfor %}</select>
+      </label>
+      <label>기한 상태
+        <select name="overdue"><option value="">전체</option><option value="true" {% if selected_overdue is sameas true %}selected{% endif %}>기한 초과</option><option value="false" {% if selected_overdue is sameas false %}selected{% endif %}>기한 내·미지정·종결</option></select>
+      </label>
       <button type="submit">필터 적용</button>
     </form>
   </section>
   <section class="card top-gap">
     {% if findings %}
     <table>
-      <thead><tr><th>심각도</th><th>신뢰도</th><th>조치 상태</th><th>규칙</th><th>위치</th><th>메시지</th></tr></thead>
+      <thead><tr><th>심각도</th><th>신뢰도</th><th>조치 상태</th><th>담당자</th><th>조치 기한</th><th>규칙</th><th>위치</th><th>메시지</th></tr></thead>
       <tbody>{% for finding in findings %}<tr>
-        <td>{{ finding.severity.value }}</td><td>{{ finding.confidence.value }}</td><td>{{ status_labels[finding.workflow.status] }}</td><td><a href="/findings/{{ finding.id }}">{{ finding.rule_name }}</a></td>
+        <td>{{ finding.severity.value }}</td><td>{{ finding.confidence.value }}</td><td>{{ status_labels[finding.workflow.status] }}</td><td>{{ finding.workflow.assignee.username if finding.workflow.assignee else '-' }}</td><td>{{ finding.workflow.due_date.isoformat() if finding.workflow.due_date else '-' }}{% if is_workflow_overdue(finding.workflow) %}<br><strong class="danger-text">기한 초과</strong>{% endif %}</td><td><a href="/findings/{{ finding.id }}">{{ finding.rule_name }}</a></td>
         <td>{{ finding.file_path }}:{{ finding.start_line }}</td><td>{{ finding.message }}</td>
       </tr>{% endfor %}</tbody>
     </table>

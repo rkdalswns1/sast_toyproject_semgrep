@@ -59,6 +59,7 @@ EXPECTED_FOREIGN_KEYS = {
     "finding_workflows": {
         ("finding_id", "findings", "id", "CASCADE"),
         ("updated_by", "users", "id", "RESTRICT"),
+        ("assignee_id", "users", "id", "RESTRICT"),
     },
 }
 
@@ -97,12 +98,12 @@ def test_create_all_builds_domain_tables_schema_history_and_foreign_keys(
         versions = session.scalars(
             select(SchemaVersion).order_by(SchemaVersion.version)
         ).all()
-        assert [version.version for version in versions] == [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+        assert [version.version for version in versions] == [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
         assert all(version.description and version.applied_at for version in versions)
 
     initialize_database(engine)
     with Session(engine) as session:
-        assert session.scalar(select(func.count()).select_from(SchemaVersion)) == 10
+        assert session.scalar(select(func.count()).select_from(SchemaVersion)) == 11
 
     engine.dispose()
 
@@ -156,7 +157,7 @@ def test_existing_database_is_upgraded_and_migration_is_recorded(
         assert legacy_rule.is_active is True
         assert session.scalars(
             select(SchemaVersion.version).order_by(SchemaVersion.version)
-        ).all() == [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+        ).all() == [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
 
     engine.dispose()
 
@@ -262,6 +263,7 @@ def test_legacy_admin_roles_are_migrated_without_breaking_project_relations(
         assert session.get(SchemaVersion, 8) is not None
         assert session.get(SchemaVersion, 9) is not None
         assert session.get(SchemaVersion, 10) is not None
+        assert session.get(SchemaVersion, 11) is not None
 
     engine.dispose()
 
@@ -526,6 +528,51 @@ def test_phase14_migration_adds_nullable_source_metadata_to_existing_project(
         assert project.deployment_version is None
         assert project.source_description is None
         assert session.get(SchemaVersion, 10) is not None
+
+    engine.dispose()
+
+
+def test_phase16_migration_adds_nullable_assignment_to_existing_workflow_table(
+    tmp_path: Path,
+) -> None:
+    engine = create_db_engine(f"sqlite:///{tmp_path / 'phase16-upgrade.db'}")
+    with engine.begin() as connection:
+        connection.execute(
+            text(
+                """
+                CREATE TABLE finding_workflows (
+                    finding_id INTEGER NOT NULL PRIMARY KEY,
+                    status VARCHAR(20) NOT NULL DEFAULT 'OPEN',
+                    note TEXT,
+                    updated_by INTEGER,
+                    updated_at DATETIME,
+                    FOREIGN KEY(finding_id) REFERENCES findings(id) ON DELETE CASCADE,
+                    FOREIGN KEY(updated_by) REFERENCES users(id) ON DELETE RESTRICT
+                )
+                """
+            )
+        )
+
+    initialize_database(engine)
+    inspector = inspect(engine)
+    columns = {
+        column["name"]
+        for column in inspector.get_columns("finding_workflows")
+    }
+    assert {"assignee_id", "due_date"} <= columns
+    with engine.connect() as connection:
+        assignee_fk = next(
+            row
+            for row in connection.execute(
+                text("PRAGMA foreign_key_list(finding_workflows)")
+            ).all()
+            if row[3] == "assignee_id"
+        )
+        assert (assignee_fk[2], assignee_fk[4], assignee_fk[6]) == (
+            "users", "id", "RESTRICT"
+        )
+    with Session(engine) as session:
+        assert session.get(SchemaVersion, 11) is not None
 
     engine.dispose()
 

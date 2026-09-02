@@ -16,6 +16,7 @@ isolated upload directory; no test uses the developer's local project data.
 | SFR-012 | Implemented | Developers maintain Semgrep YAML files; SUPER_ADMIN registers and edits KISA item, language and Rule ID mappings through `/rules/new`, and persisted mappings control Finding storage. |
 | SFR-013 | Implemented | Authenticated catalog list/detail, filters and SUPER_ADMIN management separation in `app/rules/routes.py` and rule templates |
 | Phase 15 report export | Implemented | Per-analysis CSV/PDF generation and protected download routes in `app/analysis/reports.py` and `app/analysis/routes.py` |
+| Phase 16 assignment and due date | Implemented | Project-member assignee validation, due date and overdue filters in Finding service/routes and workflow tests |
 
 ## Data Requirement Status
 
@@ -33,6 +34,7 @@ isolated upload directory; no test uses the developer's local project data.
 | DAR-010 | Implemented | SQLite FK enforcement and CASCADE/RESTRICT relationship tests |
 | DAR-011 | Implemented | FindingWorkflow 1:1 model stores latest remediation status, note, updater and timestamp; migration and Finding tests |
 | DAR-012 | Implemented | Project stores current ZIP source/deployment versions and description; AnalysisRun provenance snapshots them for immutable history |
+| DAR-013 | Implemented | FindingWorkflow stores an optional active project-member assignee and due date; service validation and migration tests |
 
 ## Security Requirement Status
 
@@ -50,6 +52,7 @@ isolated upload directory; no test uses the developer's local project data.
 | SEC-010 | Implemented | Exact pins in `requirements.txt`, weekly Dependabot configuration, license inventory and update response policy in `docs/security.md` |
 | SEC-011 | Implemented | SUPER_ADMIN/assigned PROJECT_MANAGER remediation updates, USER read-only and inaccessible-resource 404 tests |
 | SEC-012 | Implemented | Report routes reuse project access checks; CSV formula escaping and report-field exclusion tests prevent unsafe or internal data export |
+| SEC-013 | Implemented | Only SUPER_ADMIN/assigned PROJECT_MANAGER can assign active project members and set due dates; USER remains read-only |
 
 ## Test Requirement Status
 
@@ -61,7 +64,7 @@ isolated upload directory; no test uses the developer's local project data.
 | TST-004 | Implemented | ZIP upload, language provenance, real Semgrep rule execution and normalized Finding persistence in end-to-end/diagnostic tests |
 | TST-005 | Implemented | Fixed vulnerable/safe Java, JavaScript and Python samples with expected rule, line, severity and confidence in `tests/samples/` |
 | TST-006 | Implemented | All 49 Rules have unique identifier, category, positive item number, name and implementation status in `tests/test_rule_catalog.py` |
-| TST-007 | Implemented | Analysis status/summary, Finding storage, severity/confidence filters, detail data and Rule FK checks in Finding/end-to-end tests |
+| TST-007 | Implemented | Analysis status/summary, Finding storage, severity/confidence/workflow/assignee/overdue filters, detail data and Rule FK checks in Finding/end-to-end tests |
 | TST-008 | Implemented | Invalid target, nonzero exit with bounded stderr preservation, timeout, operator-only error detail, correction/re-run and failed-history preservation in analysis tests |
 
 | Requirement group | Implementation | Automated verification |
@@ -78,7 +81,7 @@ isolated upload directory; no test uses the developer's local project data.
 | Registered-language detection and single/multi-language scanning | `app/analysis/languages.py`, `app/analysis/service.py` | `tests/test_analysis_execution.py`, `tests/test_rule_catalog.py` |
 | Git-ignored upload source scanning | `app/analysis/service.py` (`--no-git-ignore`) | `tests/test_analysis_execution.py`, `tests/test_end_to_end.py` |
 | Normalized Finding persistence, filters, details, and raw result preservation | `app/findings/services.py`, finding routes/templates | `tests/test_findings.py`, `tests/test_end_to_end.py` |
-| Finding remediation workflow and analysis executor display | `app/findings/services.py`, finding/analysis routes and templates | `tests/test_findings.py`, `tests/test_end_to_end.py` |
+| Finding remediation workflow, assignee/due date, and analysis executor display | `app/findings/services.py`, finding/analysis routes and templates | `tests/test_findings.py`, `tests/test_end_to_end.py` |
 | ZIP source metadata and per-analysis snapshot | `app/projects/services.py`, `app/analysis/service.py`, project/analysis templates | `tests/test_source_upload.py`, `tests/test_analysis_execution.py`, `tests/test_database_schema.py` |
 | Per-analysis CSV/PDF reports | `app/analysis/reports.py`, report routes and analysis detail template | `tests/test_reports.py` |
 | Finding/project access boundaries | `app/projects/access.py`, `app/findings/routes.py` | `tests/test_projects.py`, `tests/test_end_to_end.py` |

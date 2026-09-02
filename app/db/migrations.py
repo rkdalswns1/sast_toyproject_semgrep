@@ -257,6 +257,31 @@ def _add_project_source_metadata(connection: Connection) -> None:
         )
 
 
+def _add_finding_assignment_and_due_date(connection: Connection) -> None:
+    """Add optional project-member ownership and a calendar due date."""
+    columns = {
+        column["name"]
+        for column in inspect(connection).get_columns("finding_workflows")
+    }
+    if "assignee_id" not in columns:
+        connection.execute(
+            text(
+                "ALTER TABLE finding_workflows ADD COLUMN assignee_id INTEGER "
+                "REFERENCES users(id) ON DELETE RESTRICT"
+            )
+        )
+    if "due_date" not in columns:
+        connection.execute(
+            text("ALTER TABLE finding_workflows ADD COLUMN due_date DATE")
+        )
+    connection.execute(
+        text(
+            "CREATE INDEX IF NOT EXISTS ix_finding_workflows_assignee_id "
+            "ON finding_workflows (assignee_id)"
+        )
+    )
+
+
 SCHEMA_MIGRATIONS: tuple[SchemaMigration, ...] = (
     SchemaMigration(1, "Initial SAST domain schema baseline", _record_initial_schema),
     SchemaMigration(
@@ -304,6 +329,11 @@ SCHEMA_MIGRATIONS: tuple[SchemaMigration, ...] = (
         10,
         "Add optional ZIP source metadata to projects",
         _add_project_source_metadata,
+    ),
+    SchemaMigration(
+        11,
+        "Add Finding assignee and remediation due date",
+        _add_finding_assignment_and_due_date,
     ),
 )
 

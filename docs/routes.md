@@ -64,7 +64,7 @@ GET /findings/{finding_id}
 POST /findings/{finding_id}/status
 ```
 
-Finding 목록은 `severity`, `confidence`, `status` query parameter를 지원한다. 권한이 없는 프로젝트나 분석 ID는 정보 노출을 막기 위해 404로 처리한다. 상태 변경 POST는 SUPER_ADMIN 또는 해당 프로젝트에 할당된 PROJECT_MANAGER만 사용할 수 있으며 CSRF 검증을 적용한다.
+Finding 목록은 `severity`, `confidence`, `status`, `assignee_id`, `overdue` query parameter를 지원한다. `overdue`는 `true` 또는 `false`만 허용한다. 권한이 없는 프로젝트나 분석 ID는 정보 노출을 막기 위해 404로 처리한다. 상태 변경 POST는 상태·의견·담당자·조치 기한을 함께 갱신하며 SUPER_ADMIN 또는 해당 프로젝트에 할당된 PROJECT_MANAGER만 사용할 수 있고 CSRF 검증을 적용한다. 담당자는 해당 프로젝트에 할당된 활성 사용자만 선택할 수 있다.
 
 ## Rules
 

@@ -49,3 +49,6 @@ class User(TimestampMixin, Base):
     finding_workflow_updates: Mapped[list[FindingWorkflow]] = relationship(
         back_populates="updater", foreign_keys="FindingWorkflow.updated_by"
     )
+    assigned_finding_workflows: Mapped[list[FindingWorkflow]] = relationship(
+        back_populates="assignee", foreign_keys="FindingWorkflow.assignee_id"
+    )

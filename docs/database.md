@@ -32,7 +32,7 @@
 
 ### finding_workflows
 
-`finding_id` PK/FK findings.id, `status`, `note`, `updated_by` FK users.id, `updated_at`. Finding과 1:1 관계이며 최신 조치 상태를 저장한다. 기본 상태는 `OPEN`이고 최초 탐지 시 변경자와 변경 시각은 비어 있다.
+`finding_id` PK/FK findings.id, `status`, `note`, `assignee_id` FK users.id, `due_date`, `updated_by` FK users.id, `updated_at`. Finding과 1:1 관계이며 최신 조치 상태·담당자·기한을 저장한다. 기본 상태는 `OPEN`이고 최초 탐지 시 담당자·기한·변경자·변경 시각은 비어 있다.
 
 ### diagnostic_rules
 
@@ -55,12 +55,15 @@ KISA 카탈로그 항목과 언어별 Semgrep Rule ID를 분리한다. 하나의
 - Rule 1:N DiagnosticRule
 - Finding 1:1 FindingWorkflow
 - User 1:N FindingWorkflow through updated_by
+- User 1:N FindingWorkflow through assignee_id
 
 ## Integrity Rules
 
 SQLite 연결마다 `PRAGMA foreign_keys=ON`을 적용한다.
 
 Finding은 반드시 하나의 AnalysisRun과 Rule에 연결된다.
+
+FindingWorkflow의 담당자는 해당 Finding이 속한 프로젝트의 활성 `project_users` 관계에 포함된 사용자만 지정한다. 기한 초과 여부는 저장하지 않고 `due_date`와 최신 상태를 조회 시 비교한다.
 
 혼합 언어 AnalysisRun에서도 Finding의 `language`는 매칭된 활성 DiagnosticRule의 실제 언어와 일치해야 한다. AnalysisRun의 기준 언어를 모든 Finding에 복사하지 않는다.
 
@@ -81,6 +84,7 @@ DiagnosticRule은 카탈로그의 공식 ID·명칭을 복제하지 않는다. �
 - 버전 8은 `projects.scan_all_languages`를 추가한다. 기존 프로젝트는 기존 동작을 보존하기 위해 `false`로 이전하며 신규 프로젝트는 화면에서 통합 분석을 선택할 수 있다.
 - 버전 9는 `finding_workflows` 테이블을 생성하고 기존 Finding에 기본 `OPEN` 상태를 추가한다. 기존 분석 결과와 Rule 관계는 변경하지 않는다.
 - 버전 10은 `projects`에 nullable `source_version`, `deployment_version`, `source_description`을 추가한다. 기존 프로젝트와 분석 실행은 값이 없는 상태로 유지한다.
+- 버전 11은 `finding_workflows`에 nullable `assignee_id`와 `due_date`를 추가한다. 기존 조치 상태·의견·변경 정보는 유지하고 기존 행은 담당자와 기한이 없는 상태로 둔다.
 
 ## Deletion Policy
 
@@ -91,5 +95,5 @@ DiagnosticRule은 카탈로그의 공식 ID·명칭을 복제하지 않는다. �
 - ProjectUser는 연결된 Project가 삭제되면 함께 삭제한다.
 - 사용 중인 Rule은 삭제할 수 없다.
 - Finding이 참조하는 Rule에는 `RESTRICT` 정책을 사용한다.
-- Finding 삭제 시 FindingWorkflow를 함께 삭제하고, 상태 변경자를 참조 중인 User 삭제는 제한한다.
+- Finding 삭제 시 FindingWorkflow를 함께 삭제하고, 상태 변경자 또는 담당자로 참조 중인 User 삭제는 제한한다.
 - `projects.created_by`와 `analysis_runs.executed_by`의 기록 보존을 위해 참조 중인 User의 물리 삭제를 제한한다.

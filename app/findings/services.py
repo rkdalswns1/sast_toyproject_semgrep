@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
+from datetime import date, datetime, timezone
 from pathlib import Path
-from datetime import datetime, timezone
 from typing import Any
 
 from sqlalchemy import select
@@ -14,7 +14,9 @@ from app.db.models.diagnostic_rule import DiagnosticRule
 from app.db.models.enums import Confidence, FindingStatus, Language, Severity
 from app.db.models.finding import Finding
 from app.db.models.finding_workflow import FindingWorkflow
+from app.db.models.project import ProjectUser
 from app.db.models.rule import Rule
+from app.db.models.user import User
 
 
 class FindingNormalizationError(ValueError):
@@ -29,6 +31,11 @@ _SEMGREP_SEVERITY_MAP = {
     "ERROR": Severity.HIGH,
     "WARNING": Severity.MEDIUM,
     "INFO": Severity.INFO,
+}
+
+OPEN_WORKFLOW_STATUSES = {
+    FindingStatus.OPEN,
+    FindingStatus.IN_PROGRESS,
 }
 
 
@@ -217,6 +224,8 @@ def update_finding_workflow(
     finding_id: int,
     workflow_status: FindingStatus,
     note: str | None,
+    assignee_id: int | None,
+    due_date: date | None,
     updated_by: int,
 ) -> FindingWorkflow:
     """Replace the latest remediation state without changing scan evidence."""
@@ -233,12 +242,44 @@ def update_finding_workflow(
         finding = session.get(Finding, finding_id)
         if finding is None:
             raise FindingWorkflowError("Finding을 찾을 수 없습니다.")
+        if assignee_id is not None:
+            assignee = session.scalar(
+                select(User)
+                .join(ProjectUser, ProjectUser.user_id == User.id)
+                .join(
+                    AnalysisRun,
+                    AnalysisRun.project_id == ProjectUser.project_id,
+                )
+                .where(
+                    AnalysisRun.id == finding.analysis_run_id,
+                    User.id == assignee_id,
+                    User.is_active.is_(True),
+                )
+            )
+            if assignee is None:
+                raise FindingWorkflowError(
+                    "담당자는 이 프로젝트에 할당된 활성 사용자만 선택할 수 있습니다."
+                )
         workflow = session.get(FindingWorkflow, finding_id)
         if workflow is None:
             workflow = FindingWorkflow(finding_id=finding_id)
             session.add(workflow)
         workflow.status = workflow_status
         workflow.note = normalized_note
+        workflow.assignee_id = assignee_id
+        workflow.due_date = due_date
         workflow.updated_by = updated_by
         workflow.updated_at = datetime.now(timezone.utc)
     return workflow
+
+
+def is_workflow_overdue(
+    workflow: FindingWorkflow, *, today: date | None = None
+) -> bool:
+    """Return the current display state without persisting derived data."""
+    reference_date = today or date.today()
+    return (
+        workflow.due_date is not None
+        and workflow.due_date < reference_date
+        and workflow.status in OPEN_WORKFLOW_STATUSES
+    )

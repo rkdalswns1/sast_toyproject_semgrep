@@ -81,6 +81,8 @@ Python에서는 `str, Enum`을 상속한 Enum으로 정의한다. SQLAlchemy 모
 
 Finding 조치 상태의 기본값은 `OPEN`이다. `FALSE_POSITIVE`와 `ACCEPTED_RISK`는 변경 의견을 필수로 하며 의견은 앞뒤 공백을 제거해 최대 2,000자로 저장한다.
 
+Finding 담당자는 해당 프로젝트에 할당된 활성 사용자만 지정할 수 있다. 조치 기한은 `YYYY-MM-DD` 날짜로 저장하며 선택 입력이다. `OPEN` 또는 `IN_PROGRESS` 상태에서 조치 기한이 오늘보다 이전이면 조회 시 기한 초과로 계산한다. `RESOLVED`, `FALSE_POSITIVE`, `ACCEPTED_RISK`는 기한이 지나도 기한 초과로 표시하지 않는다.
+
 ZIP 소스 메타데이터는 모두 선택 입력이다. `source_version`과 `deployment_version`은 앞뒤 공백을 제거해 각각 최대 100자, `source_description`은 최대 2,000자로 저장한다. 공백만 입력한 값은 `NULL`로 처리한다.
 
 ## Bootstrap Super Administrator

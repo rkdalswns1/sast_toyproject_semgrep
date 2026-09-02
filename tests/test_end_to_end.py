@@ -262,6 +262,8 @@ def test_authenticated_upload_analysis_findings_and_access_boundaries(tmp_path: 
                     data={
                         "workflow_status": "RESOLVED",
                         "note": "프로젝트 담당자가 수정 여부를 확인함",
+                        "assignee_id": str(viewer_id),
+                        "due_date": "2000-01-01",
                         "csrf_token": _csrf_token(member_finding.text),
                     },
                 )
@@ -284,7 +286,19 @@ def test_authenticated_upload_analysis_findings_and_access_boundaries(tmp_path: 
                 assert viewer_finding.status_code == 200
                 assert "조치 완료" in viewer_finding.text
                 assert "프로젝트 담당자가 수정 여부를 확인함" in viewer_finding.text
-                assert "조치 상태 저장" not in viewer_finding.text
+                assert "viewer@company.com" in viewer_finding.text
+                assert "2000-01-01" in viewer_finding.text
+                assert "기한 초과" not in viewer_finding.text
+                assert "조치 정보 저장" not in viewer_finding.text
+                overdue_findings = await viewer_client.get(
+                    f"/analysis/{analysis_id}/findings?overdue=true"
+                )
+                assert f'/findings/{finding_id}' not in overdue_findings.text
+                closed_findings = await viewer_client.get(
+                    f"/analysis/{analysis_id}/findings?overdue=false"
+                    f"&assignee_id={viewer_id}"
+                )
+                assert f'/findings/{finding_id}' in closed_findings.text
                 viewer_projects = await viewer_client.get("/projects")
                 viewer_update = await viewer_client.post(
                     f"/findings/{finding_id}/status",
@@ -343,5 +357,9 @@ def test_authenticated_upload_analysis_findings_and_access_boundaries(tmp_path: 
         workflow = session.get(FindingWorkflow, finding_id)
         assert workflow is not None
         assert workflow.status is FindingStatus.RESOLVED
+        assert workflow.assignee is not None
+        assert workflow.assignee.username == "viewer@company.com"
+        assert workflow.due_date is not None
+        assert workflow.due_date.isoformat() == "2000-01-01"
         assert workflow.updater is not None
         assert workflow.updater.username == "member@company.com"

@@ -3,6 +3,7 @@ import io
 import re
 import subprocess
 import zipfile
+from datetime import date
 from pathlib import Path
 
 from httpx import ASGITransport, AsyncClient
@@ -19,11 +20,14 @@ from app.db.models.enums import (
     ImplementationStatus,
     Language,
     Severity,
+    UserRole,
 )
 from app.db.models.finding import Finding
 from app.db.models.finding_workflow import FindingWorkflow
 from app.db.models.rule import Rule
 from app.db.models.user import User
+from app.db.models.project import ProjectUser
+from app.findings.services import is_workflow_overdue
 from app.main import create_app
 from app.projects.services import create_project
 
@@ -107,6 +111,34 @@ def test_semgrep_result_is_normalized_persisted_and_filterable(tmp_path: Path, m
     async def exercise() -> tuple[int, int, int]:
         async with application.router.lifespan_context(application):
             project_id = _seed_project_and_rule(application)
+            with Session(application.state.db_engine) as session:
+                admin = session.scalar(
+                    select(User).where(User.username == "admin@company.com")
+                )
+                assert admin is not None
+                outsider = User(
+                    username="outsider@company.com",
+                    password_hash="hash",
+                    role=UserRole.USER,
+                )
+                inactive_member = User(
+                    username="inactive@company.com",
+                    password_hash="hash",
+                    role=UserRole.USER,
+                    is_active=False,
+                )
+                session.add_all([outsider, inactive_member])
+                session.flush()
+                session.add(
+                    ProjectUser(
+                        project_id=project_id,
+                        user_id=inactive_member.id,
+                    )
+                )
+                session.commit()
+                admin_id = admin.id
+                outsider_id = outsider.id
+                inactive_member_id = inactive_member.id
             transport = ASGITransport(app=application)
             async with AsyncClient(transport=transport, base_url="http://testserver", follow_redirects=False) as client:
                 login = await client.get("/login")
@@ -162,14 +194,50 @@ def test_semgrep_result_is_normalized_persisted_and_filterable(tmp_path: Path, m
                     data={
                         "workflow_status": "IN_PROGRESS",
                         "note": "담당자가 원인을 확인하고 있습니다.",
+                        "assignee_id": str(admin_id),
+                        "due_date": "2000-01-01",
                         "csrf_token": token,
                     },
                 )
                 assert updated.status_code == 303
+                invalid_assignee = await client.post(
+                    f"/findings/{finding_id_match.group(1)}/status",
+                    data={
+                        "workflow_status": "IN_PROGRESS",
+                        "assignee_id": str(outsider_id),
+                        "due_date": "2000-01-01",
+                        "csrf_token": token,
+                    },
+                )
+                assert invalid_assignee.status_code == 400
+                inactive_assignee = await client.post(
+                    f"/findings/{finding_id_match.group(1)}/status",
+                    data={
+                        "workflow_status": "IN_PROGRESS",
+                        "assignee_id": str(inactive_member_id),
+                        "due_date": "2000-01-01",
+                        "csrf_token": token,
+                    },
+                )
+                assert inactive_assignee.status_code == 400
                 filtered = await client.get(
                     f"/analysis/{analysis_id}/findings?status=IN_PROGRESS"
+                    f"&assignee_id={admin_id}&overdue=true"
                 )
                 assert "조치 중" in filtered.text
+                assert "기한 초과" in filtered.text
+                assert "admin@company.com" in filtered.text
+                blank_assignee_filter = await client.get(
+                    f"/analysis/{analysis_id}/findings?severity="
+                    f"&confidence=&status=&assignee_id=&overdue=true"
+                )
+                assert blank_assignee_filter.status_code == 200
+                assert "기한 초과" in blank_assignee_filter.text
+                updated_detail = await client.get(
+                    f"/findings/{finding_id_match.group(1)}"
+                )
+                assert "2000-01-01" in updated_detail.text
+                assert "기한 초과" in updated_detail.text
                 return project_id, analysis_id, int(finding_id_match.group(1))
 
     _, analysis_id, finding_id = asyncio.run(exercise())
@@ -207,6 +275,12 @@ def test_semgrep_result_is_normalized_persisted_and_filterable(tmp_path: Path, m
         assert workflow is not None
         assert workflow.status is FindingStatus.IN_PROGRESS
         assert workflow.note == "담당자가 원인을 확인하고 있습니다."
+        assert workflow.assignee is not None
+        assert workflow.assignee.username == "admin@company.com"
+        assert workflow.due_date == date(2000, 1, 1)
+        assert is_workflow_overdue(workflow, today=date(2000, 1, 2)) is True
+        workflow.status = FindingStatus.RESOLVED
+        assert is_workflow_overdue(workflow, today=date(2000, 1, 2)) is False
         assert workflow.updater is not None
         assert workflow.updater.username == "admin@company.com"
         assert workflow.updated_at is not None
