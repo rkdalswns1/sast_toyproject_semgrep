@@ -324,6 +324,15 @@ def _add_finding_revalidations(connection: Connection) -> None:
         )
 
 
+def _add_project_source_summary(connection: Connection) -> None:
+    """Add a bounded summary of the latest safely extracted source."""
+    columns = {
+        column["name"] for column in inspect(connection).get_columns("projects")
+    }
+    if "source_summary" not in columns:
+        connection.execute(text("ALTER TABLE projects ADD COLUMN source_summary JSON"))
+
+
 SCHEMA_MIGRATIONS: tuple[SchemaMigration, ...] = (
     SchemaMigration(1, "Initial SAST domain schema baseline", _record_initial_schema),
     SchemaMigration(
@@ -381,6 +390,11 @@ SCHEMA_MIGRATIONS: tuple[SchemaMigration, ...] = (
         12,
         "Add Finding revalidation history",
         _add_finding_revalidations,
+    ),
+    SchemaMigration(
+        13,
+        "Add latest safely extracted project source summary",
+        _add_project_source_summary,
     ),
 )
 

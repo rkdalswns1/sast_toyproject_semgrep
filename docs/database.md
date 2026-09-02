@@ -8,7 +8,7 @@
 
 ### projects
 
-`id` PK, `name` NOT NULL, `description`, `source_type` NOT NULL, `language` NOT NULL, `scan_all_languages` NOT NULL, `source_path` NOT NULL, `source_version`, `deployment_version`, `source_description`, `created_by` FK users.id, `created_at`, `updated_at`. `language`은 기준 언어이며 `scan_all_languages=true`이면 ZIP에서 감지된 모든 지원 언어를 함께 분석한다. 세 소스 메타데이터 컬럼은 현재 프로젝트가 가리키는 최신 ZIP을 설명한다.
+`id` PK, `name` NOT NULL, `description`, `source_type` NOT NULL, `language` NOT NULL, `scan_all_languages` NOT NULL, `source_path` NOT NULL, `source_version`, `deployment_version`, `source_description`, `source_summary` JSON, `created_by` FK users.id, `created_at`, `updated_at`. `language`은 기준 언어이며 `scan_all_languages=true`이면 ZIP에서 감지된 모든 지원 언어를 함께 분석한다. 세 소스 메타데이터 컬럼과 `source_summary`는 현재 프로젝트가 가리키는 최신 ZIP을 설명한다. 요약은 경로 성분을 제거한 원본 파일명, 업로드 시각, 실제 정규 파일 수·바이트, 중앙 registry로 감지한 언어와 최대 20개의 상대 파일 경로만 저장한다.
 
 ### project_users
 
@@ -95,6 +95,7 @@ DiagnosticRule은 카탈로그의 공식 ID·명칭을 복제하지 않는다. �
 - 버전 10은 `projects`에 nullable `source_version`, `deployment_version`, `source_description`을 추가한다. 기존 프로젝트와 분석 실행은 값이 없는 상태로 유지한다.
 - 버전 11은 `finding_workflows`에 nullable `assignee_id`와 `due_date`를 추가한다. 기존 조치 상태·의견·변경 정보는 유지하고 기존 행은 담당자와 기한이 없는 상태로 둔다.
 - 버전 12는 `finding_revalidations` 테이블과 FK·고유 제약을 생성한다. 기존 Finding과 조치 상태는 변경하지 않는다.
+- 버전 13은 `projects`에 nullable JSON `source_summary`를 추가한다. 기존 프로젝트는 요약이 없는 상태로 유지하며 다음 ZIP 업로드 성공 시 생성한다.
 
 ## Deletion Policy
 

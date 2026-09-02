@@ -105,6 +105,12 @@ def _create_project(application, name: str = "Upload target") -> int:
 def test_safe_zip_upload_persists_isolated_source_workspace(tmp_path: Path) -> None:
     settings = _settings(tmp_path)
     application = create_app(settings)
+    source_entries = {
+        "src/app.py": "print('safe')",
+        "web/app.js": "console.log('safe')",
+        "java/App.java": "class App {}",
+        **{f"docs/file-{index:02d}.txt": str(index) for index in range(19)},
+    }
 
     async def exercise() -> int:
         async with application.router.lifespan_context(application):
@@ -125,8 +131,8 @@ def test_safe_zip_upload_persists_isolated_source_workspace(tmp_path: Path) -> N
                     },
                     files={
                         "source_file": (
-                            "sample.zip",
-                            _zip_bytes({"src/app.py": "print('safe')"}),
+                            "folder/sample.zip",
+                            _zip_bytes(source_entries),
                             "application/zip",
                         )
                     },
@@ -136,6 +142,11 @@ def test_safe_zip_upload_persists_isolated_source_workspace(tmp_path: Path) -> N
                 assert "source-1.4.0" in stored_detail.text
                 assert "release-2026.09" in stored_detail.text
                 assert "고객 포털 배포 후보 소스" in stored_detail.text
+                assert "분석 전 소스 확인" in stored_detail.text
+                assert "sample.zip" in stored_detail.text
+                assert "22개" in stored_detail.text
+                assert "JAVA, JAVASCRIPT, PYTHON" in stored_detail.text
+                assert "이 소스로 Semgrep 분석 실행" in stored_detail.text
 
                 invalid_metadata = await client.post(
                     f"/projects/{project_id}/analysis",
@@ -166,6 +177,23 @@ def test_safe_zip_upload_persists_isolated_source_workspace(tmp_path: Path) -> N
         assert project.source_version == "source-1.4.0"
         assert project.deployment_version == "release-2026.09"
         assert project.source_description == "고객 포털 배포 후보 소스"
+        source_summary = project.source_summary
+        assert source_summary is not None
+        assert source_summary["archive_name"] == "sample.zip"
+        assert source_summary["file_count"] == len(source_entries)
+        assert source_summary["total_bytes"] == sum(
+            len(content.encode()) for content in source_entries.values()
+        )
+        assert source_summary["detected_languages"] == [
+            "JAVA",
+            "JAVASCRIPT",
+            "PYTHON",
+        ]
+        assert source_summary["sample_paths"] == sorted(source_entries)[:20]
+        assert len(source_summary["sample_paths"]) == 20
+        assert source_summary["uploaded_at"].endswith("+00:00")
+        assert str(settings.upload_dir.resolve()) not in str(source_summary)
+        assert "print('safe')" not in str(source_summary)
     assert extracted_path.is_dir()
     assert extracted_path.parent.parent.parent == settings.upload_dir / "projects" / str(project_id)
     assert (extracted_path / "src" / "app.py").read_text() == "print('safe')"
@@ -206,6 +234,7 @@ def test_zip_slip_and_symlink_uploads_are_rejected_without_persistence(tmp_path:
         project = session.get(Project, project_id)
         assert project is not None
         assert project.source_path == ""
+        assert project.source_summary is None
     assert not list(settings.upload_dir.rglob("escape.py"))
     assert not list(settings.upload_dir.rglob("link.py"))
 
@@ -256,3 +285,4 @@ def test_zip_limits_are_checked_before_source_path_is_updated(tmp_path: Path) ->
         project = session.get(Project, project_id)
         assert project is not None
         assert project.source_path == ""
+        assert project.source_summary is None

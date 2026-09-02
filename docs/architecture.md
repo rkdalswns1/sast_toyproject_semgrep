@@ -43,7 +43,8 @@ uploads/
 ## Analysis Flow
 
 ```text
-ZIP upload → safe extraction → registered-language detection → Semgrep
+ZIP upload → safe extraction → source summary confirmation
+→ registered-language detection → Semgrep
 → JSON result → normalizer → Finding persistence → result pages
 ```
 
@@ -52,6 +53,8 @@ ZIP upload → safe extraction → registered-language detection → Semgrep
 Finding의 탐지 원본과 조치 관리는 분리한다. `FindingWorkflow`는 최신 상태·의견·담당자·기한만 보관하고, 기한 초과 여부는 조회 시 현재 날짜와 상태로 계산한다.
 
 Finding 재검증은 기존 분석 파이프라인을 재사용하여 항상 새 AnalysisRun과 Finding을 만든다. 원본과 새 결과의 비교 이력은 `FindingRevalidation`에 저장하고 원본 Finding 및 FindingWorkflow는 수정하지 않는다.
+
+업로드 소스 요약은 안전한 압축 해제가 끝난 staging 영역의 실제 정규 파일로 계산한다. Project에는 현재 소스의 제한된 요약만 저장하며 원본 ZIP 파일명에서 경로 성분을 제거하고 모든 파일 위치는 소스 루트 기준 상대경로로 제한한다. 요약은 소스 경로·버전 메타데이터와 함께 교체되며 별도 업로드 이력을 만들지 않는다.
 
 CSV와 PDF 보고서는 AnalysisRun, Project, Finding, FindingWorkflow를 읽어 공통 보고서 스냅샷으로 변환한 뒤 요청 시 메모리에서 생성한다. 보고서 생성은 DB를 변경하지 않으며 원본 Semgrep JSON과 시스템 경로를 출력 계층에 전달하지 않는다.
 

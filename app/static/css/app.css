@@ -51,6 +51,10 @@ th { color: #637c90; font-size: .85rem; }
 .metadata-grid { display: grid; gap: 18px; grid-template-columns: repeat(4, 1fr); }
 .metadata-grid div { display: grid; gap: 6px; }
 .metadata-grid span { color: #637c90; font-size: .85rem; }
+.source-summary-grid { margin-top: 20px; }
+.source-paths summary { color: #274052; cursor: pointer; font-weight: 700; }
+.source-paths ul { margin-bottom: 0; padding-left: 22px; }
+.source-paths li { margin-top: 8px; overflow-wrap: anywhere; }
 .filter-grid { align-items: end; display: grid; gap: 12px; grid-template-columns: repeat(5, minmax(0, 1fr)); }
 .filter-grid label { display: grid; gap: 7px; font-weight: 600; }
 .filter-grid input, .filter-grid select { border: 1px solid #b9c8d5; border-radius: 4px; font: inherit; padding: 10px; width: 100%; }

@@ -106,12 +106,12 @@ def test_create_all_builds_domain_tables_schema_history_and_foreign_keys(
         versions = session.scalars(
             select(SchemaVersion).order_by(SchemaVersion.version)
         ).all()
-        assert [version.version for version in versions] == [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
+        assert [version.version for version in versions] == [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13]
         assert all(version.description and version.applied_at for version in versions)
 
     initialize_database(engine)
     with Session(engine) as session:
-        assert session.scalar(select(func.count()).select_from(SchemaVersion)) == 12
+        assert session.scalar(select(func.count()).select_from(SchemaVersion)) == 13
 
     engine.dispose()
 
@@ -165,7 +165,7 @@ def test_existing_database_is_upgraded_and_migration_is_recorded(
         assert legacy_rule.is_active is True
         assert session.scalars(
             select(SchemaVersion.version).order_by(SchemaVersion.version)
-        ).all() == [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
+        ).all() == [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13]
 
     engine.dispose()
 
@@ -273,6 +273,7 @@ def test_legacy_admin_roles_are_migrated_without_breaking_project_relations(
         assert session.get(SchemaVersion, 10) is not None
         assert session.get(SchemaVersion, 11) is not None
         assert session.get(SchemaVersion, 12) is not None
+        assert session.get(SchemaVersion, 13) is not None
 
     engine.dispose()
 
@@ -606,6 +607,50 @@ def test_phase17_migration_creates_revalidation_history_table(
         assert session.scalar(
             select(func.count()).select_from(FindingRevalidation)
         ) == 0
+
+    engine.dispose()
+
+
+def test_phase18_migration_adds_nullable_source_summary_to_existing_project(
+    tmp_path: Path,
+) -> None:
+    engine = create_db_engine(f"sqlite:///{tmp_path / 'phase18-upgrade.db'}")
+    initialize_database(engine)
+
+    with engine.begin() as connection:
+        connection.execute(
+            text(
+                "INSERT INTO users (username, password_hash, role, is_active, "
+                "must_change_password) VALUES "
+                "('summary-owner@company.com', 'hash', 'SUPER_ADMIN', 1, 0)"
+            )
+        )
+        user_id = connection.execute(
+            text("SELECT id FROM users WHERE username = 'summary-owner@company.com'")
+        ).scalar_one()
+        connection.execute(
+            text(
+                "INSERT INTO projects (name, source_type, language, source_path, "
+                "source_version, created_by, scan_all_languages) VALUES "
+                "('Legacy summary project', 'ZIP', 'PYTHON', 'legacy/source', "
+                "'source-1', :user_id, 0)"
+            ),
+            {"user_id": user_id},
+        )
+        connection.execute(text("DELETE FROM schema_versions WHERE version = 13"))
+        connection.execute(text("ALTER TABLE projects DROP COLUMN source_summary"))
+
+    initialize_database(engine)
+
+    with Session(engine) as session:
+        project = session.scalar(
+            select(Project).where(Project.name == "Legacy summary project")
+        )
+        assert project is not None
+        assert project.source_path == "legacy/source"
+        assert project.source_version == "source-1"
+        assert project.source_summary is None
+        assert session.get(SchemaVersion, 13) is not None
 
     engine.dispose()
 

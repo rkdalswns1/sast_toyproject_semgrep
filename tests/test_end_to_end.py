@@ -248,6 +248,8 @@ def test_authenticated_upload_analysis_findings_and_access_boundaries(tmp_path: 
                 assert member_project.status_code == 200
                 assert "ZIP 소스 업로드" in member_project.text
                 assert "Semgrep 분석 실행" in member_project.text
+                assert "분석 전 소스 확인" in member_project.text
+                assert "source-v2.zip" in member_project.text
                 assert (await member_client.get(f"/projects/{project_id}/edit")).status_code == 200
                 assert (await member_client.get(f"/projects/{project_id}/users")).status_code == 200
                 assert (await member_client.get("/projects/new")).status_code == 403
@@ -300,6 +302,11 @@ def test_authenticated_upload_analysis_findings_and_access_boundaries(tmp_path: 
                 )
                 assert f'/findings/{finding_id}' in closed_findings.text
                 viewer_projects = await viewer_client.get("/projects")
+                viewer_project = await viewer_client.get(f"/projects/{project_id}")
+                assert viewer_project.status_code == 200
+                assert "분석 전 소스 확인" in viewer_project.text
+                assert "source-v2.zip" in viewer_project.text
+                assert "이 소스로 Semgrep 분석 실행" not in viewer_project.text
                 viewer_update = await viewer_client.post(
                     f"/findings/{finding_id}/status",
                     data={

@@ -93,7 +93,7 @@ async def upload_project_source_or_run_analysis(
                 deployment_version=deployment_version,
                 source_description=source_description,
             )
-            source_path = await save_project_source(
+            stored_source = await save_project_source(
                 source_file,
                 project_id=stored_project_id,
                 settings=request.app.state.settings,
@@ -102,10 +102,11 @@ async def upload_project_source_or_run_analysis(
             update_project_source(
                 session,
                 project_id=stored_project_id,
-                source_path=source_path,
+                source_path=stored_source.path,
                 source_version=normalized_metadata[0],
                 deployment_version=normalized_metadata[1],
                 source_description=normalized_metadata[2],
+                source_summary=stored_source.summary,
             )
         except (ProjectManagementError, SourceUploadError) as exc:
             return _render(

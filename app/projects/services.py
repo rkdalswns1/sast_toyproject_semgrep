@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -137,6 +138,7 @@ def update_project_source(
     source_version: str | None = None,
     deployment_version: str | None = None,
     source_description: str | None = None,
+    source_summary: dict[str, Any] | None = None,
 ) -> None:
     """Persist only a workspace path created by the upload service."""
     normalized_metadata = normalize_source_metadata(
@@ -149,6 +151,7 @@ def update_project_source(
         if project is None:
             raise ProjectManagementError("프로젝트를 찾을 수 없습니다.")
         project.source_path = str(source_path)
+        project.source_summary = source_summary
         (
             project.source_version,
             project.deployment_version,

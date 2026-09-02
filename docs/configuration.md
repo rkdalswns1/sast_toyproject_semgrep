@@ -87,6 +87,8 @@ Finding 재검증 결과는 `STILL_DETECTED`, `LIKELY_RESOLVED`, `REVIEW_REQUIRE
 
 ZIP 소스 메타데이터는 모두 선택 입력이다. `source_version`과 `deployment_version`은 앞뒤 공백을 제거해 각각 최대 100자, `source_description`은 최대 2,000자로 저장한다. 공백만 입력한 값은 `NULL`로 처리한다.
 
+ZIP 소스 요약의 원본 파일명은 경로 성분을 제거해 최대 255자로 저장한다. 실제 압축 해제된 정규 파일의 소스 상대경로는 정렬한 뒤 최대 20개만 저장하며 파일 내용과 시스템 절대경로는 저장하지 않는다.
+
 ## Bootstrap Super Administrator
 
 ```text

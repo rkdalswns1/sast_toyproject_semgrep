@@ -54,6 +54,8 @@ GET  /analysis/{analysis_id}/report.pdf
 
 ZIP 파일이 포함된 POST는 선택 입력인 `source_version`, `deployment_version`, `source_description`을 함께 받아 최신 프로젝트 소스 정보로 저장한다. 파일이 없는 POST는 현재 저장된 소스와 메타데이터를 스냅샷하여 분석을 실행한다.
 
+ZIP 저장 성공 시 안전하게 압축 해제된 실제 파일의 제한된 요약도 최신 프로젝트 정보로 함께 저장한다. 프로젝트 상세 GET은 접근 가능한 모든 역할에 이 요약을 표시하며, 별도 소스 미리보기·다운로드 경로는 제공하지 않는다.
+
 두 보고서 GET은 SUPER_ADMIN 또는 해당 프로젝트에 할당된 PROJECT_MANAGER·USER가 사용할 수 있다. 접근할 수 없는 분석 ID는 `404`로 처리한다. 응답 파일명은 사용자 입력을 사용하지 않고 분석 ID만 사용하며 `Content-Disposition: attachment`로 제공한다.
 
 ## Findings

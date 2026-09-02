@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
-from sqlalchemy import Boolean, ForeignKey, String, Text, false
+from sqlalchemy import JSON, Boolean, ForeignKey, String, Text, false
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
@@ -36,6 +36,7 @@ class Project(TimestampMixin, Base):
     source_version: Mapped[str | None] = mapped_column(String(100))
     deployment_version: Mapped[str | None] = mapped_column(String(100))
     source_description: Mapped[str | None] = mapped_column(Text)
+    source_summary: Mapped[dict[str, Any] | None] = mapped_column(JSON)
     created_by: Mapped[int] = mapped_column(
         ForeignKey("users.id", ondelete="RESTRICT"), nullable=False, index=True
     )

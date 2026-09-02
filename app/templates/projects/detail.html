@@ -18,6 +18,29 @@
     <div><span>생성 일시</span><strong>{{ project.created_at.strftime('%Y-%m-%d %H:%M') }}</strong></div>
   </section>
   {% if project.source_description %}<section class="card top-gap"><h2>현재 소스 설명</h2><p>{{ project.source_description }}</p></section>{% endif %}
+  {% if project.source_summary %}
+  {% set source_summary = project.source_summary %}
+  <section class="card top-gap">
+    <div class="section-heading">
+      <div><h2>분석 전 소스 확인</h2><p class="muted">안전하게 압축 해제된 실제 파일을 기준으로 만든 최신 소스 요약입니다.</p></div>
+      <span class="badge">분석 준비됨</span>
+    </div>
+    <div class="metadata-grid source-summary-grid">
+      <div><span>ZIP 파일명</span><strong>{{ source_summary.archive_name }}</strong></div>
+      <div><span>업로드 시각</span><strong>{{ source_summary.uploaded_at[:19].replace('T', ' ') }} UTC</strong></div>
+      <div><span>실제 파일 수</span><strong>{{ source_summary.file_count }}개</strong></div>
+      <div><span>압축 해제 크기</span><strong>{{ source_summary.total_bytes }} bytes</strong></div>
+      <div><span>감지 언어</span><strong>{{ source_summary.detected_languages | join(', ') if source_summary.detected_languages else '지원 언어 없음' }}</strong></div>
+    </div>
+    <details class="source-paths top-gap">
+      <summary>주요 파일 경로 {{ source_summary.sample_paths | length }}개 보기</summary>
+      {% if source_summary.sample_paths %}
+      <ul>{% for path in source_summary.sample_paths %}<li><code>{{ path }}</code></li>{% endfor %}</ul>
+      {% else %}<p class="muted">압축 해제된 파일이 없습니다.</p>{% endif %}
+    </details>
+    <p class="muted top-gap">파일 내용과 시스템 내부 경로는 표시하지 않습니다.</p>
+  </section>
+  {% endif %}
   {% if can_manage_project %}
   <section class="card top-gap">
     <h2>ZIP 소스 업로드</h2>
@@ -37,7 +60,7 @@
     {% if project.source_path %}
     <form method="post" action="/projects/{{ project.id }}/analysis" class="form-stack top-gap">
       <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-      <button type="submit">Semgrep 분석 실행</button>
+      <button type="submit">이 소스로 Semgrep 분석 실행</button>
     </form>
     <p class="muted"><a href="/projects/{{ project.id }}/analysis">분석 실행 이력 보기</a></p>
     {% endif %}

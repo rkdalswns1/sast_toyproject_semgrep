@@ -18,6 +18,7 @@ isolated upload directory; no test uses the developer's local project data.
 | Phase 15 report export | Implemented | Per-analysis CSV/PDF generation and protected download routes in `app/analysis/reports.py` and `app/analysis/routes.py` |
 | Phase 16 assignment and due date | Implemented | Project-member assignee validation, due date and overdue filters in Finding service/routes and workflow tests |
 | Phase 17 Finding revalidation | Implemented | New-run comparison history, protected revalidation route and deterministic comparison tests |
+| Phase 18 source confirmation | Implemented | Safe-extraction source summary on project detail and persistence tests |
 
 ## Data Requirement Status
 
@@ -37,6 +38,7 @@ isolated upload directory; no test uses the developer's local project data.
 | DAR-012 | Implemented | Project stores current ZIP source/deployment versions and description; AnalysisRun provenance snapshots them for immutable history |
 | DAR-013 | Implemented | FindingWorkflow stores an optional active project-member assignee and due date; service validation and migration tests |
 | DAR-014 | Implemented | FindingRevalidation stores source/new-run/matched Finding links, result, executor and timestamp |
+| DAR-015 | Implemented | Project JSON stores a bounded summary derived from the latest safely extracted source |
 
 ## Security Requirement Status
 
@@ -56,6 +58,7 @@ isolated upload directory; no test uses the developer's local project data.
 | SEC-012 | Implemented | Report routes reuse project access checks; CSV formula escaping and report-field exclusion tests prevent unsafe or internal data export |
 | SEC-013 | Implemented | Only SUPER_ADMIN/assigned PROJECT_MANAGER can assign active project members and set due dates; USER remains read-only |
 | SEC-014 | Implemented | Revalidation reuses project-operation authorization, CSRF and isolated Semgrep execution; USER remains read-only |
+| SEC-015 | Implemented | Source summary is generated after safe extraction and excludes content and absolute paths |
 
 ## Test Requirement Status
 
@@ -70,6 +73,7 @@ isolated upload directory; no test uses the developer's local project data.
 | TST-007 | Implemented | Analysis status/summary, Finding storage, severity/confidence/workflow/assignee/overdue filters, detail data and Rule FK checks in Finding/end-to-end tests |
 | TST-008 | Implemented | Invalid target, nonzero exit with bounded stderr preservation, timeout, operator-only error detail, correction/re-run and failed-history preservation in analysis tests |
 | TST-009 | Implemented | Revalidation comparison outcomes, history, permissions and unchanged workflow status in revalidation tests |
+| TST-010 | Implemented | Source summary persistence, bounded relative paths, language detection, UI and failed-replacement preservation tests |
 
 | Requirement group | Implementation | Automated verification |
 |---|---|---|
@@ -88,6 +92,7 @@ isolated upload directory; no test uses the developer's local project data.
 | Finding remediation workflow, assignee/due date, and analysis executor display | `app/findings/services.py`, finding/analysis routes and templates | `tests/test_findings.py`, `tests/test_end_to_end.py` |
 | Finding revalidation and new-run comparison history | `app/findings/revalidation.py`, Finding routes/detail template | `tests/test_revalidation.py` |
 | ZIP source metadata and per-analysis snapshot | `app/projects/services.py`, `app/analysis/service.py`, project/analysis templates | `tests/test_source_upload.py`, `tests/test_analysis_execution.py`, `tests/test_database_schema.py` |
+| Pre-analysis latest-source summary | `app/projects/upload.py`, `app/projects/services.py`, project detail template | `tests/test_source_upload.py`, `tests/test_database_schema.py` |
 | Per-analysis CSV/PDF reports | `app/analysis/reports.py`, report routes and analysis detail template | `tests/test_reports.py` |
 | Finding/project access boundaries | `app/projects/access.py`, `app/findings/routes.py` | `tests/test_projects.py`, `tests/test_end_to_end.py` |
 | KISA 2021 implementation-stage 49-item catalog | `app/rules/catalog.py`, `app/rules/services.py` | `tests/test_rule_catalog.py` |
