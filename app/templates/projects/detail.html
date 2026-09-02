@@ -6,7 +6,7 @@
 <main class="page-shell">
   <header class="page-header">
     <div><p class="eyebrow">프로젝트</p><h1>{{ project.name }}</h1><p class="muted">{{ project.description or "프로젝트 설명이 없습니다." }}</p></div>
-    <div class="header-actions"><a class="secondary button" href="/projects">목록</a>{% if can_manage_project %}<a class="secondary button" href="/projects/{{ project.id }}/users">사용자 할당</a><a class="button" href="/projects/{{ project.id }}/edit">프로젝트 수정</a>{% endif %}</div>
+    <div class="header-actions"><a class="secondary button" href="/projects">목록</a>{% if can_manage_project %}<a class="secondary button" href="/projects/{{ project.id }}/users">사용자 할당</a><a class="button" href="/projects/{{ project.id }}/edit">프로젝트 수정</a>{% endif %}{% if current_user.role.value == 'SUPER_ADMIN' %}<form method="post" action="/projects/{{ project.id }}/delete" onsubmit="return confirm('이 프로젝트와 모든 분석 결과 및 저장 소스를 삭제할까요? 이 작업은 되돌릴 수 없습니다.');"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button class="danger" type="submit">프로젝트 삭제</button></form>{% endif %}</div>
   </header>
   <section class="card metadata-grid">
     <div><span>기준 언어</span><strong>{{ project.language.value }}</strong></div>

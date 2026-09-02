@@ -11,6 +11,8 @@ h1, h2, p { margin-top: 0; }
 button, .button { border: 0; border-radius: 5px; background: #176aa6; color: #fff; cursor: pointer; font: inherit; padding: 10px 14px; text-decoration: none; }
 button:disabled { cursor: not-allowed; opacity: .5; }
 .secondary { background: #fff; border: 1px solid #c9d5df; color: #274052; }
+.danger { background: #b42318; color: #fff; }
+.danger:hover { background: #8f1c13; }
 .app-layout { display: flex; min-height: 100vh; }
 .site-sidebar { background: #fff; border-right: 1px solid #dce5ec; flex: 0 0 224px; padding: 30px 16px; }
 .site-brand { color: #17212b; display: block; font-size: 1.2rem; font-weight: 800; margin: 0 10px 28px; text-decoration: none; }

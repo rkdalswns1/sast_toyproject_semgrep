@@ -63,10 +63,14 @@ class ReportFinding:
     rule_name: str
     severity: str
     confidence: str
+    primary_cwe_id: str
+    related_cwe_ids: str
+    cwe_mapping_confidence: str
     location: str
     message: str
     workflow_status: str
     workflow_note: str
+    recommendation: str
 
 
 @dataclass(frozen=True, slots=True)
@@ -143,10 +147,18 @@ def build_analysis_report(
                 rule_name=_clean_text(finding.rule_name),
                 severity=finding.severity.value,
                 confidence=finding.confidence.value,
+                primary_cwe_id=_clean_text(finding.primary_cwe_id),
+                related_cwe_ids=", ".join(finding.related_cwe_ids),
+                cwe_mapping_confidence=(
+                    finding.cwe_mapping_confidence.value
+                    if finding.cwe_mapping_confidence
+                    else ""
+                ),
                 location=_finding_location(finding),
                 message=_clean_text(finding.message),
                 workflow_status=FINDING_STATUS_LABELS[workflow_status],
                 workflow_note=_clean_text(workflow.note if workflow else None),
+                recommendation=_clean_text(finding.recommendation),
             )
         )
 
@@ -199,10 +211,14 @@ def render_csv_report(report: AnalysisReport) -> bytes:
         "규칙명",
         "심각도",
         "신뢰도",
+        "주요 CWE",
+        "관련 CWE",
+        "CWE 매핑 확신",
         "파일 위치",
         "메시지",
         "조치 상태",
         "검토 의견",
+        "조치 권고",
     ]
     writer.writerow(headers)
     base_row: list[object] = [
@@ -217,17 +233,21 @@ def render_csv_report(report: AnalysisReport) -> bytes:
     findings: tuple[ReportFinding | None, ...] = report.findings or (None,)
     for finding in findings:
         detail_row: list[object] = (
-            ["", "", "", "", "", "", "", ""]
+            ["", "", "", "", "", "", "", "", "", "", "", ""]
             if finding is None
             else [
                 finding.kisa_id,
                 finding.rule_name,
                 finding.severity,
                 finding.confidence,
+                finding.primary_cwe_id,
+                finding.related_cwe_ids,
+                finding.cwe_mapping_confidence,
                 finding.location,
                 finding.message,
                 finding.workflow_status,
                 finding.workflow_note,
+                finding.recommendation,
             ]
         )
         writer.writerow([_csv_safe_cell(value) for value in [*base_row, *detail_row]])
@@ -456,6 +476,14 @@ def render_pdf_report(report: AnalysisReport) -> bytes:
                     "",
                     "",
                 ],
+                [
+                    Paragraph("주요 CWE", styles["small"]),
+                    Paragraph(_paragraph_text(finding.primary_cwe_id), styles["body"]),
+                    Paragraph("매핑 확신", styles["small"]),
+                    Paragraph(_paragraph_text(finding.cwe_mapping_confidence), styles["body"]),
+                    Paragraph("관련 CWE", styles["small"]),
+                    Paragraph(_paragraph_text(finding.related_cwe_ids), styles["body"]),
+                ],
             ],
             colWidths=[19 * mm, 35 * mm, 19 * mm, 25 * mm, 22 * mm, 44 * mm],
         )
@@ -485,6 +513,9 @@ def render_pdf_report(report: AnalysisReport) -> bytes:
                 Spacer(1, 1.5 * mm),
                 Paragraph("검토 의견", styles["small"]),
                 Paragraph(_paragraph_text(finding.workflow_note), styles["body"]),
+                Spacer(1, 1.5 * mm),
+                Paragraph("조치 권고", styles["small"]),
+                Paragraph(_paragraph_text(finding.recommendation), styles["body"]),
                 Spacer(1, 2 * mm),
             ]
         )

@@ -165,9 +165,11 @@ def test_successful_semgrep_run_collects_json_and_cleans_workspace(tmp_path: Pat
             "kisa_standard_id",
             "rule_name",
             "severity",
-            "language",
-            "semgrep_rule_id",
-        }
+                "language",
+                "semgrep_rule_id",
+                "primary_cwe_id",
+                "cwe_mapping_confidence",
+            }
         for rule in provenance["active_rules"]
     )
     assert provenance["semgrep_version"] == "1.175.0"

@@ -188,7 +188,7 @@ def _sha256_source_tree(source_root: Path) -> str:
 
 def _active_rule_snapshot(
     session: Session, scan_languages: Language | set[Language]
-) -> list[dict[str, str]]:
+) -> list[dict[str, str | None]]:
     """Return the effective catalog-to-Semgrep mappings for this run."""
     if isinstance(scan_languages, Language):
         scan_languages = {scan_languages}
@@ -199,6 +199,8 @@ def _active_rule_snapshot(
             Rule.severity,
             DiagnosticRule.language,
             DiagnosticRule.semgrep_rule_id,
+            DiagnosticRule.primary_cwe_id,
+            DiagnosticRule.cwe_mapping_confidence,
         )
         .join(DiagnosticRule, DiagnosticRule.catalog_rule_id == Rule.id)
         .where(
@@ -215,12 +217,26 @@ def _active_rule_snapshot(
             "severity": severity.value,
             "language": language.value,
             "semgrep_rule_id": semgrep_rule_id,
+            "primary_cwe_id": primary_cwe_id,
+            "cwe_mapping_confidence": (
+                cwe_mapping_confidence.value if cwe_mapping_confidence else None
+            ),
         }
-        for standard_id, rule_name, severity, language, semgrep_rule_id in rows
+        for (
+            standard_id,
+            rule_name,
+            severity,
+            language,
+            semgrep_rule_id,
+            primary_cwe_id,
+            cwe_mapping_confidence,
+        ) in rows
     ]
 
 
-def _active_rule_snapshot_sha256(active_rules: list[dict[str, str]]) -> str:
+def _active_rule_snapshot_sha256(
+    active_rules: list[dict[str, str | None]],
+) -> str:
     serialized = json.dumps(
         active_rules, ensure_ascii=False, separators=(",", ":"), sort_keys=True
     ).encode("utf-8")
@@ -231,7 +247,7 @@ def _analysis_provenance(
     source_path: Path,
     project_language,
     settings: Settings,
-    active_rules: list[dict[str, str]],
+    active_rules: list[dict[str, str | None]],
     *,
     detected_languages: set[Language],
     scan_languages: set[Language],

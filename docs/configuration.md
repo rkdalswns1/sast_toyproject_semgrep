@@ -77,6 +77,8 @@ Python에서는 `str, Enum`을 상속한 Enum으로 정의한다. SQLAlchemy 모
 
 `diagnostic_rules.language`도 `Language` Enum 값을 사용한다. 같은 KISA 카탈로그 항목에는 언어별 Semgrep Rule ID를 하나씩만 연결하고, Semgrep Rule ID는 전체에서 중복될 수 없다.
 
+`primary_cwe_id`와 `related_cwe_ids`는 대문자 `CWE-숫자` 형식만 허용한다. 주요 CWE가 없으면 관련 CWE와 `cwe_mapping_confidence`도 비워 둔다. 관련 CWE는 주요 CWE와 중복될 수 없으며 `remediation_guidance`는 앞뒤 공백을 제거해 최대 2,000자로 저장한다. MITRE 링크는 저장하지 않고 CWE 번호에서 `https://cwe.mitre.org/data/definitions/{번호}.html` 형식으로 생성한다.
+
 `projects.language`와 `analysis_runs.language`는 기존 호환성과 대표 언어 표시를 위해 기준 언어 하나를 저장한다. `projects.scan_all_languages=true`이면 분석 시 ZIP에서 감지된 모든 `Language` 값을 대상으로 하며, 실제 분석 언어 목록은 AnalysisRun 요약의 `provenance.scanned_languages`에 저장한다. Finding에는 `MULTI` 같은 합성 값을 사용하지 않고 실제 매칭된 `diagnostic_rules.language`만 저장한다.
 
 Finding 조치 상태의 기본값은 `OPEN`이다. `FALSE_POSITIVE`와 `ACCEPTED_RISK`는 변경 의견을 필수로 하며 의견은 앞뒤 공백을 제거해 최대 2,000자로 저장한다.

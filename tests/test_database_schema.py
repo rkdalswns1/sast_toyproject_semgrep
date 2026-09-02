@@ -106,12 +106,12 @@ def test_create_all_builds_domain_tables_schema_history_and_foreign_keys(
         versions = session.scalars(
             select(SchemaVersion).order_by(SchemaVersion.version)
         ).all()
-        assert [version.version for version in versions] == [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13]
+        assert [version.version for version in versions] == [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
         assert all(version.description and version.applied_at for version in versions)
 
     initialize_database(engine)
     with Session(engine) as session:
-        assert session.scalar(select(func.count()).select_from(SchemaVersion)) == 13
+        assert session.scalar(select(func.count()).select_from(SchemaVersion)) == 14
 
     engine.dispose()
 
@@ -165,7 +165,7 @@ def test_existing_database_is_upgraded_and_migration_is_recorded(
         assert legacy_rule.is_active is True
         assert session.scalars(
             select(SchemaVersion.version).order_by(SchemaVersion.version)
-        ).all() == [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13]
+        ).all() == [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
 
     engine.dispose()
 
@@ -274,6 +274,7 @@ def test_legacy_admin_roles_are_migrated_without_breaking_project_relations(
         assert session.get(SchemaVersion, 11) is not None
         assert session.get(SchemaVersion, 12) is not None
         assert session.get(SchemaVersion, 13) is not None
+        assert session.get(SchemaVersion, 14) is not None
 
     engine.dispose()
 
@@ -651,6 +652,7 @@ def test_phase18_migration_adds_nullable_source_summary_to_existing_project(
         assert project.source_version == "source-1"
         assert project.source_summary is None
         assert session.get(SchemaVersion, 13) is not None
+        assert session.get(SchemaVersion, 14) is not None
 
     engine.dispose()
 

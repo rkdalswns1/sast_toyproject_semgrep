@@ -152,11 +152,14 @@ def _seed_report_data(application) -> tuple[int, int]:
             language=Language.PYTHON,
             severity=Severity.HIGH,
             confidence=Confidence.HIGH,
+            primary_cwe_id="CWE-89",
+            cwe_mapping_confidence=Confidence.HIGH,
             file_path="src/app.py",
             start_line=12,
             start_column=3,
             message='=HYPERLINK("https://invalid.example", "위험")',
             evidence={"secret": "/srv/private/evidence"},
+            recommendation="매개변수화 쿼리를 사용하세요.",
             raw_result={"secret": "RAW-SECRET-JSON"},
         )
         finding_b = Finding(
@@ -238,6 +241,9 @@ def test_reports_include_required_fields_and_exclude_internal_data(
                 assert rows[0]["분석 상태"] == "완료"
                 assert rows[0]["CRITICAL 건수"] == "1"
                 assert rows[0]["HIGH 건수"] == "1"
+                assert rows[0]["주요 CWE"] == "CWE-89"
+                assert rows[0]["CWE 매핑 확신"] == "HIGH"
+                assert rows[0]["조치 권고"] == "매개변수화 쿼리를 사용하세요."
                 assert rows[0]["메시지"].startswith("'=")
                 assert rows[0]["조치 상태"] == "조치 중"
                 assert rows[0]["검토 의견"] == "담당자가 수정 중"
@@ -263,6 +269,8 @@ def test_reports_include_required_fields_and_exclude_internal_data(
                     "deploy-2026.09",
                     "admin@company.com",
                     "SQL 삽입",
+                    "CWE-89",
+                    "매개변수화 쿼리를 사용하세요.",
                     "조치 중",
                     "담당자가 수정 중",
                     "경로 비공개",

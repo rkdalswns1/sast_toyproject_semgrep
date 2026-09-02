@@ -10,6 +10,7 @@ from sqlalchemy import Connection, Engine, inspect, select, text, update
 
 from app.db.models.finding import Finding
 from app.db.models.schema_version import SchemaVersion
+from app.rules.cwe import APPROVED_CWE_MAPPINGS
 
 
 MigrationOperation = Callable[[Connection], None]
@@ -333,6 +334,97 @@ def _add_project_source_summary(connection: Connection) -> None:
         connection.execute(text("ALTER TABLE projects ADD COLUMN source_summary JSON"))
 
 
+def _add_cwe_mapping_and_finding_snapshots(connection: Connection) -> None:
+    """Add Rule-ID-level CWE metadata and backfill exact known snapshots."""
+    diagnostic_columns = {
+        column["name"]
+        for column in inspect(connection).get_columns("diagnostic_rules")
+    }
+    diagnostic_additions = {
+        "primary_cwe_id": "VARCHAR(20)",
+        "related_cwe_ids": "JSON NOT NULL DEFAULT '[]'",
+        "cwe_mapping_confidence": "VARCHAR(6)",
+        "remediation_guidance": "TEXT",
+    }
+    for column_name, column_type in diagnostic_additions.items():
+        if column_name not in diagnostic_columns:
+            connection.execute(
+                text(
+                    f"ALTER TABLE diagnostic_rules ADD COLUMN "
+                    f"{column_name} {column_type}"
+                )
+            )
+
+    finding_columns = {
+        column["name"] for column in inspect(connection).get_columns("findings")
+    }
+    finding_additions = {
+        "primary_cwe_id": "VARCHAR(20)",
+        "related_cwe_ids": "JSON NOT NULL DEFAULT '[]'",
+        "cwe_mapping_confidence": "VARCHAR(6)",
+    }
+    for column_name, column_type in finding_additions.items():
+        if column_name not in finding_columns:
+            connection.execute(
+                text(
+                    f"ALTER TABLE findings ADD COLUMN {column_name} {column_type}"
+                )
+            )
+
+    for rule_id, mapping in APPROVED_CWE_MAPPINGS.items():
+        values = {
+            "rule_id": rule_id,
+            "primary_cwe_id": mapping.primary_cwe_id,
+            "related_cwe_ids": json.dumps(list(mapping.related_cwe_ids)),
+            "confidence": mapping.confidence.value,
+            "guidance": mapping.remediation_guidance,
+        }
+        connection.execute(
+            text(
+                "UPDATE diagnostic_rules SET primary_cwe_id = :primary_cwe_id, "
+                "related_cwe_ids = :related_cwe_ids, "
+                "cwe_mapping_confidence = :confidence, "
+                "remediation_guidance = :guidance "
+                "WHERE semgrep_rule_id = :rule_id"
+            ),
+            values,
+        )
+
+    existing_findings = connection.execute(
+        text("SELECT id, raw_result FROM findings")
+    ).all()
+    for finding_id, raw_result in existing_findings:
+        if isinstance(raw_result, str):
+            try:
+                raw_result = json.loads(raw_result)
+            except json.JSONDecodeError:
+                continue
+        if not isinstance(raw_result, dict):
+            continue
+        check_id = raw_result.get("check_id")
+        if not isinstance(check_id, str):
+            continue
+        mapping = APPROVED_CWE_MAPPINGS.get(check_id)
+        if mapping is None:
+            mapping = APPROVED_CWE_MAPPINGS.get(check_id.rsplit(".", 1)[-1])
+        if mapping is None:
+            continue
+        connection.execute(
+            text(
+                "UPDATE findings SET primary_cwe_id = :primary_cwe_id, "
+                "related_cwe_ids = :related_cwe_ids, "
+                "cwe_mapping_confidence = :confidence "
+                "WHERE id = :finding_id"
+            ),
+            {
+                "finding_id": finding_id,
+                "primary_cwe_id": mapping.primary_cwe_id,
+                "related_cwe_ids": json.dumps(list(mapping.related_cwe_ids)),
+                "confidence": mapping.confidence.value,
+            },
+        )
+
+
 SCHEMA_MIGRATIONS: tuple[SchemaMigration, ...] = (
     SchemaMigration(1, "Initial SAST domain schema baseline", _record_initial_schema),
     SchemaMigration(
@@ -395,6 +487,11 @@ SCHEMA_MIGRATIONS: tuple[SchemaMigration, ...] = (
         13,
         "Add latest safely extracted project source summary",
         _add_project_source_summary,
+    ),
+    SchemaMigration(
+        14,
+        "Add CWE mappings and immutable Finding snapshots",
+        _add_cwe_mapping_and_finding_snapshots,
     ),
 )
 

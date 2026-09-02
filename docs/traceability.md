@@ -19,6 +19,7 @@ isolated upload directory; no test uses the developer's local project data.
 | Phase 16 assignment and due date | Implemented | Project-member assignee validation, due date and overdue filters in Finding service/routes and workflow tests |
 | Phase 17 Finding revalidation | Implemented | New-run comparison history, protected revalidation route and deterministic comparison tests |
 | Phase 18 source confirmation | Implemented | Safe-extraction source summary on project detail and persistence tests |
+| Phase 19 CWE guidance | Implemented | Rule-ID-level CWE mapping, Finding snapshots, detail/report output and SUPER_ADMIN project deletion |
 
 ## Data Requirement Status
 
@@ -39,6 +40,7 @@ isolated upload directory; no test uses the developer's local project data.
 | DAR-013 | Implemented | FindingWorkflow stores an optional active project-member assignee and due date; service validation and migration tests |
 | DAR-014 | Implemented | FindingRevalidation stores source/new-run/matched Finding links, result, executor and timestamp |
 | DAR-015 | Implemented | Project JSON stores a bounded summary derived from the latest safely extracted source |
+| DAR-016 | Implemented | DiagnosticRule CWE/guidance data and immutable Finding snapshots with schema migration 14 |
 
 ## Security Requirement Status
 
@@ -59,6 +61,7 @@ isolated upload directory; no test uses the developer's local project data.
 | SEC-013 | Implemented | Only SUPER_ADMIN/assigned PROJECT_MANAGER can assign active project members and set due dates; USER remains read-only |
 | SEC-014 | Implemented | Revalidation reuses project-operation authorization, CSRF and isolated Semgrep execution; USER remains read-only |
 | SEC-015 | Implemented | Source summary is generated after safe extraction and excludes content and absolute paths |
+| SEC-016 | Implemented | CSRF-protected SUPER_ADMIN project deletion uses a computed upload-root boundary |
 
 ## Test Requirement Status
 
@@ -74,6 +77,7 @@ isolated upload directory; no test uses the developer's local project data.
 | TST-008 | Implemented | Invalid target, nonzero exit with bounded stderr preservation, timeout, operator-only error detail, correction/re-run and failed-history preservation in analysis tests |
 | TST-009 | Implemented | Revalidation comparison outcomes, history, permissions and unchanged workflow status in revalidation tests |
 | TST-010 | Implemented | Source summary persistence, bounded relative paths, language detection, UI and failed-replacement preservation tests |
+| TST-011 | Implemented | Exact CWE mappings, snapshots, reports, rule management and project deletion tests |
 
 | Requirement group | Implementation | Automated verification |
 |---|---|---|

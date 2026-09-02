@@ -50,6 +50,8 @@ ZIP upload → safe extraction → source summary confirmation
 
 분석 엔진과 결과 저장 사이에는 정규화 계층을 둔다. Semgrep 원본 결과는 `raw_result`로 보존한다.
 
+CWE는 언어별 Semgrep Rule ID인 DiagnosticRule에 연결하고 분석 시 Finding에 복사한다. 따라서 KISA 항목 하나에 언어별로 다른 CWE를 둘 수 있으며, 규칙 관리 정보가 바뀌어도 과거 Finding·보고서의 CWE와 조치 권고는 유지된다.
+
 Finding의 탐지 원본과 조치 관리는 분리한다. `FindingWorkflow`는 최신 상태·의견·담당자·기한만 보관하고, 기한 초과 여부는 조회 시 현재 날짜와 상태로 계산한다.
 
 Finding 재검증은 기존 분석 파이프라인을 재사용하여 항상 새 AnalysisRun과 Finding을 만든다. 원본과 새 결과의 비교 이력은 `FindingRevalidation`에 저장하고 원본 Finding 및 FindingWorkflow는 수정하지 않는다.
@@ -90,6 +92,8 @@ MVP에서는 Alembic을 사용하지 않는다.
 적용이 완료된 버전, 설명 및 적용 시각은 `schema_versions`에 기록한다. 동일한 버전은 다시 실행하지 않는다. 기존 SQLite DB의 컬럼 추가는 마이그레이션이 담당하며, 신규 DB는 최신 모델로 생성한 후 같은 버전을 이력으로 기록한다.
 
 SQLite 연결마다 foreign key 검사를 활성화한다.
+
+프로젝트 삭제는 SUPER_ADMIN 전용 서비스가 처리한다. DB의 연쇄 삭제로 프로젝트 하위 데이터를 정리하고, 소스 파일은 저장된 경로 문자열을 사용하지 않고 설정된 업로드 루트와 프로젝트 ID로 전용 디렉터리를 계산해 제거한다.
 
 ## Request Database Session
 

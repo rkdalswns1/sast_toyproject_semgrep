@@ -29,6 +29,7 @@ from app.findings.revalidation import (
     FindingRevalidationError,
     execute_finding_revalidation,
 )
+from app.rules.cwe import mitre_cwe_url
 
 
 router = APIRouter()
@@ -141,6 +142,11 @@ def _finding_detail_context(
         "revalidations": revalidations,
         "revalidation_result_labels": REVALIDATION_RESULT_LABELS,
         "revalidation_error": revalidation_error,
+        "primary_cwe_url": (
+            mitre_cwe_url(finding.primary_cwe_id)
+            if finding.primary_cwe_id
+            else None
+        ),
     }
 
 

@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 from pathlib import Path
+import shutil
+import uuid
 from typing import Any
 
 from sqlalchemy import select
@@ -157,3 +159,43 @@ def update_project_source(
             project.deployment_version,
             project.source_description,
         ) = normalized_metadata
+
+
+def delete_project(
+    session: Session, *, project_id: int, upload_dir: Path
+) -> None:
+    """Delete one project and only its computed upload-root workspace."""
+    upload_root = upload_dir.resolve()
+    projects_root = (upload_root / "projects").resolve()
+    project_directory = projects_root / str(project_id)
+    if project_directory.parent != projects_root:
+        raise ProjectManagementError("프로젝트 저장 경로를 안전하게 확인하지 못했습니다.")
+
+    quarantined_directory: Path | None = None
+    try:
+        if project_directory.exists() or project_directory.is_symlink():
+            trash_root = upload_root / ".trash"
+            trash_root.mkdir(mode=0o700, parents=True, exist_ok=True)
+            quarantined_directory = trash_root / f"project-{project_id}-{uuid.uuid4().hex}"
+            project_directory.rename(quarantined_directory)
+
+        with session.begin():
+            project = session.get(Project, project_id)
+            if project is None:
+                raise ProjectManagementError("프로젝트를 찾을 수 없습니다.")
+            session.delete(project)
+    except Exception:
+        if quarantined_directory is not None and (
+            quarantined_directory.exists() or quarantined_directory.is_symlink()
+        ):
+            project_directory.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+            quarantined_directory.rename(project_directory)
+        raise
+
+    if quarantined_directory is not None and (
+        quarantined_directory.exists() or quarantined_directory.is_symlink()
+    ):
+        if quarantined_directory.is_symlink():
+            quarantined_directory.unlink()
+        else:
+            shutil.rmtree(quarantined_directory)

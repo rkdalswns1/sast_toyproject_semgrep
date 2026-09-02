@@ -4,7 +4,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from sqlalchemy import ForeignKey, JSON, String, Text
+from sqlalchemy import ForeignKey, JSON, String, Text, text
+from sqlalchemy.ext.mutable import MutableList
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
@@ -40,6 +41,16 @@ class Finding(Base):
     )
     confidence: Mapped[Confidence] = mapped_column(
         persisted_enum(Confidence, "finding_confidence"), nullable=False
+    )
+    primary_cwe_id: Mapped[str | None] = mapped_column(String(20))
+    related_cwe_ids: Mapped[list[str]] = mapped_column(
+        MutableList.as_mutable(JSON),
+        nullable=False,
+        default=list,
+        server_default=text("'[]'"),
+    )
+    cwe_mapping_confidence: Mapped[Confidence | None] = mapped_column(
+        persisted_enum(Confidence, "finding_cwe_confidence")
     )
     file_path: Mapped[str] = mapped_column(String(500), nullable=False)
     start_line: Mapped[int] = mapped_column(nullable=False)

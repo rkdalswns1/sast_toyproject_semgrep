@@ -6,7 +6,7 @@
     <div>
       <p class="eyebrow">KISA 규칙 · SUPER_ADMIN</p>
       <h1>진단 항목 {{ '수정' if rule else '등록' }}</h1>
-      <p class="muted">KISA 카탈로그 항목에 언어별 Semgrep Rule ID를 연결합니다.</p>
+      <p class="muted">KISA 카탈로그 항목에 언어별 Semgrep Rule ID와 CWE·조치 권고를 연결합니다.</p>
       <p class="muted">동일한 Rule ID의 YAML 규칙은 개발자가 규칙 디렉터리에 별도로 배치합니다.</p>
     </div>
     <a class="secondary button" href="/rules">목록으로</a>
@@ -28,6 +28,11 @@
                  value="{{ rule_ids.get(language, '') }}"
                  placeholder="예: kisa-2021-example-{{ language.value | lower }}">
         </label>
+        {% set metadata = mapping_data.get(language, {}) %}
+        <label>주요 CWE<input type="text" name="{{ language.value | lower }}_primary_cwe_id" value="{{ metadata.get('primary_cwe_id', '') }}" placeholder="예: CWE-89"></label>
+        <label>관련 CWE<input type="text" name="{{ language.value | lower }}_related_cwe_ids" value="{{ metadata.get('related_cwe_ids', '') }}" placeholder="쉼표로 구분, 없으면 비움"></label>
+        <label>CWE 매핑 확신 수준<select name="{{ language.value | lower }}_cwe_mapping_confidence"><option value="">보류</option>{% for confidence in confidence_values %}<option value="{{ confidence.value }}" {% if metadata.get('cwe_mapping_confidence') == confidence.value %}selected{% endif %}>{{ confidence.value }}</option>{% endfor %}</select></label>
+        <label>조치 권고<textarea name="{{ language.value | lower }}_remediation_guidance" rows="3" maxlength="2000">{{ metadata.get('remediation_guidance', '') }}</textarea></label>
       {% endfor %}
       <p class="muted">지원하지 않는 언어는 비워두세요.</p>
     </fieldset>
@@ -52,6 +57,11 @@
                  value="{{ rule_ids.get(language, '') }}"
                  placeholder="예: kisa-2021-example-{{ language.value | lower }}">
         </label>
+        {% set metadata = mapping_data.get(language, {}) %}
+        <label>주요 CWE<input type="text" name="{{ language.value | lower }}_primary_cwe_id" value="{{ metadata.get('primary_cwe_id', '') }}" placeholder="예: CWE-89"></label>
+        <label>관련 CWE<input type="text" name="{{ language.value | lower }}_related_cwe_ids" value="{{ metadata.get('related_cwe_ids', '') }}" placeholder="쉼표로 구분, 없으면 비움"></label>
+        <label>CWE 매핑 확신 수준<select name="{{ language.value | lower }}_cwe_mapping_confidence"><option value="">보류</option>{% for confidence in confidence_values %}<option value="{{ confidence.value }}" {% if metadata.get('cwe_mapping_confidence') == confidence.value %}selected{% endif %}>{{ confidence.value }}</option>{% endfor %}</select></label>
+        <label>조치 권고<textarea name="{{ language.value | lower }}_remediation_guidance" rows="3" maxlength="2000">{{ metadata.get('remediation_guidance', '') }}</textarea></label>
         {% endfor %}
         <p class="muted">하나 이상 입력하고, 지원하지 않는 언어는 비워두세요.</p>
       </fieldset>

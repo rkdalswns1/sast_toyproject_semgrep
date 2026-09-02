@@ -6,11 +6,16 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 from app.auth.dependencies import current_active_user, get_db, is_super_admin
 from app.auth.session import csrf_is_valid, csrf_token, persist_session
-from app.db.models.enums import ImplementationStatus, Language
+from app.db.models.enums import Confidence, ImplementationStatus, Language
 from app.db.models.finding import Finding
 from app.db.models.rule import Rule
 from app.db.models.user import User
-from app.rules.services import DiagnosticRuleManagementError, save_diagnostic_rule_mappings, toggle_catalog_rule_active
+from app.rules.services import (
+    DiagnosticRuleManagementError,
+    DiagnosticRuleMetadataInput,
+    save_diagnostic_rule_mappings,
+    toggle_catalog_rule_active,
+)
 
 router = APIRouter()
 def _render(request: Request, name: str, context: dict[str, object], status_code: int = 200) -> HTMLResponse:
@@ -35,6 +40,7 @@ def _registration_context(
     user: User,
     error: str | None = None,
     rule_ids: dict[Language, str] | None = None,
+    mapping_data: dict[Language, dict[str, object]] | None = None,
 ) -> dict[str, object]:
     catalog_rules = [
         rule
@@ -46,6 +52,8 @@ def _registration_context(
         "catalog_rules": catalog_rules,
         "languages": list(Language),
         "rule_ids": rule_ids or {},
+        "mapping_data": mapping_data or {},
+        "confidence_values": list(Confidence),
         "error": error,
         "current_user": user,
     }
@@ -66,6 +74,56 @@ def _stored_rule_ids(rule: Rule) -> dict[Language, str]:
         mapping.language: mapping.semgrep_rule_id
         for mapping in rule.diagnostic_rules
     }
+
+
+def _stored_mapping_data(rule: Rule) -> dict[Language, dict[str, object]]:
+    return {
+        mapping.language: {
+            "primary_cwe_id": mapping.primary_cwe_id or "",
+            "related_cwe_ids": ", ".join(mapping.related_cwe_ids),
+            "cwe_mapping_confidence": (
+                mapping.cwe_mapping_confidence.value
+                if mapping.cwe_mapping_confidence
+                else ""
+            ),
+            "remediation_guidance": mapping.remediation_guidance or "",
+        }
+        for mapping in rule.diagnostic_rules
+    }
+
+
+async def _submitted_mapping_data(
+    request: Request,
+) -> tuple[
+    dict[Language, DiagnosticRuleMetadataInput],
+    dict[Language, dict[str, object]],
+]:
+    form = await request.form()
+    inputs: dict[Language, DiagnosticRuleMetadataInput] = {}
+    display: dict[Language, dict[str, object]] = {}
+    for language in Language:
+        prefix = language.value.lower()
+        primary_key = f"{prefix}_primary_cwe_id"
+        if primary_key not in form:
+            continue
+        value = DiagnosticRuleMetadataInput(
+            primary_cwe_id=str(form.get(primary_key, "")),
+            related_cwe_ids=str(form.get(f"{prefix}_related_cwe_ids", "")),
+            cwe_mapping_confidence=str(
+                form.get(f"{prefix}_cwe_mapping_confidence", "")
+            ),
+            remediation_guidance=str(
+                form.get(f"{prefix}_remediation_guidance", "")
+            ),
+        )
+        inputs[language] = value
+        display[language] = {
+            "primary_cwe_id": value.primary_cwe_id,
+            "related_cwe_ids": value.related_cwe_ids,
+            "cwe_mapping_confidence": value.cwe_mapping_confidence,
+            "remediation_guidance": value.remediation_guidance,
+        }
+    return inputs, display
 
 @router.get("/rules", response_class=HTMLResponse)
 async def rule_list(request: Request, q: str = "", category: str = "", implementation_status: str = "", language: str = "", active: str = "", session: Session = Depends(get_db)) -> Response:
@@ -100,24 +158,25 @@ async def rule_edit(rule_id: int, request: Request, session: Session = Depends(g
     if isinstance(user, RedirectResponse): return user
     rule = session.scalar(select(Rule).options(selectinload(Rule.diagnostic_rules)).where(Rule.id == rule_id))
     if rule is None: raise HTTPException(status_code=404)
-    return _render(request, "rules/form.html", {"rule": rule, "catalog_rules": _rules(session), "languages": list(Language), "rule_ids": _stored_rule_ids(rule), "error": None, "current_user": user})
+    return _render(request, "rules/form.html", {"rule": rule, "catalog_rules": _rules(session), "languages": list(Language), "rule_ids": _stored_rule_ids(rule), "mapping_data": _stored_mapping_data(rule), "confidence_values": list(Confidence), "error": None, "current_user": user})
 
 async def _save(request: Request, session: Session, catalog_rule_id: int, rule_ids: dict[Language, str], token: str, *, create_mode: bool) -> Response:
     _csrf(request, token); user = _super_admin(request, session)
     if isinstance(user, RedirectResponse): return user
+    mapping_inputs, mapping_data = await _submitted_mapping_data(request)
     try:
-        session.rollback(); rule = save_diagnostic_rule_mappings(session, catalog_rule_id=catalog_rule_id, rule_ids=rule_ids)
+        session.rollback(); rule = save_diagnostic_rule_mappings(session, catalog_rule_id=catalog_rule_id, rule_ids=rule_ids, mapping_metadata=mapping_inputs)
     except DiagnosticRuleManagementError as exc:
         if create_mode:
             session.rollback()
             return _render(
                 request,
                 "rules/form.html",
-                _registration_context(session, user, str(exc), rule_ids),
+                _registration_context(session, user, str(exc), rule_ids, mapping_data),
                 400,
             )
         rule = session.get(Rule, catalog_rule_id)
-        return _render(request, "rules/form.html", {"rule": rule, "catalog_rules": _rules(session), "languages": list(Language), "rule_ids": rule_ids, "error": str(exc), "current_user": user}, 400)
+        return _render(request, "rules/form.html", {"rule": rule, "catalog_rules": _rules(session), "languages": list(Language), "rule_ids": rule_ids, "mapping_data": mapping_data, "confidence_values": list(Confidence), "error": str(exc), "current_user": user}, 400)
     return _redirect(f"/rules/{rule.id}", request)
 
 @router.post("/rules", response_class=HTMLResponse)

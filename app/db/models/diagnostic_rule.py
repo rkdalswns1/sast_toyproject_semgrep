@@ -4,11 +4,12 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Boolean, ForeignKey, String, UniqueConstraint, text
+from sqlalchemy import Boolean, ForeignKey, JSON, String, Text, UniqueConstraint, text
+from sqlalchemy.ext.mutable import MutableList
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
-from app.db.models.enums import Language
+from app.db.models.enums import Confidence, Language
 from app.db.models.mixins import TimestampMixin
 from app.db.models.types import persisted_enum
 
@@ -30,6 +31,17 @@ class DiagnosticRule(TimestampMixin, Base):
         persisted_enum(Language, "diagnostic_rule_language"), nullable=False
     )
     semgrep_rule_id: Mapped[str] = mapped_column(String(255), nullable=False, unique=True)
+    primary_cwe_id: Mapped[str | None] = mapped_column(String(20))
+    related_cwe_ids: Mapped[list[str]] = mapped_column(
+        MutableList.as_mutable(JSON),
+        nullable=False,
+        default=list,
+        server_default=text("'[]'"),
+    )
+    cwe_mapping_confidence: Mapped[Confidence | None] = mapped_column(
+        persisted_enum(Confidence, "diagnostic_rule_cwe_confidence")
+    )
+    remediation_guidance: Mapped[str | None] = mapped_column(Text)
     is_active: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=True, server_default=text("1")
     )

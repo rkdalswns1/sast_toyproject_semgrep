@@ -44,7 +44,7 @@ def test_catalog_views_and_admin_mapping_management(tmp_path: Path) -> None:
                     rule = session.scalar(select(Rule).where(Rule.standard_id == "제1절-1")); assert rule
                     rule_id = rule.id
                 edit = await client.get(f"/rules/{rule_id}/edit")
-                response = await client.post(f"/rules/{rule_id}/edit", data={"python_rule_id":"kisa-2021-sql-injection-python", "csrf_token":_csrf(edit.text)}, follow_redirects=False)
+                response = await client.post(f"/rules/{rule_id}/edit", data={"python_rule_id":"kisa-2021-sql-injection-python", "python_primary_cwe_id":"CWE-89", "python_related_cwe_ids":"", "python_cwe_mapping_confidence":"HIGH", "python_remediation_guidance":"매개변수화 쿼리를 사용하세요.", "csrf_token":_csrf(edit.text)}, follow_redirects=False)
                 assert response.headers["location"] == f"/rules/{rule_id}"
                 return rule_id
     rule_id = asyncio.run(exercise())
@@ -53,6 +53,9 @@ def test_catalog_views_and_admin_mapping_management(tmp_path: Path) -> None:
         assert len(mappings) == 1
         assert mappings[0].language is Language.PYTHON
         assert mappings[0].semgrep_rule_id == "kisa-2021-sql-injection-python"
+        assert mappings[0].primary_cwe_id == "CWE-89"
+        assert mappings[0].cwe_mapping_confidence.value == "HIGH"
+        assert mappings[0].remediation_guidance == "매개변수화 쿼리를 사용하세요."
 
     async def restart() -> None:
         async with app.router.lifespan_context(app):

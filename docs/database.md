@@ -28,7 +28,7 @@
 
 ### findings
 
-`id` PK, `analysis_run_id` FK analysis_runs.id, `rule_id` FK rules.id, `rule_name`, `kisa_id`, `language`, `severity`, `confidence`, `file_path`, `start_line`, `start_column`, `end_line`, `end_column`, `message`, `evidence`, `recommendation`, `raw_result`.
+`id` PK, `analysis_run_id` FK analysis_runs.id, `rule_id` FK rules.id, `rule_name`, `kisa_id`, `language`, `severity`, `confidence`, `primary_cwe_id`, `related_cwe_ids` JSON, `cwe_mapping_confidence`, `file_path`, `start_line`, `start_column`, `end_line`, `end_column`, `message`, `evidence`, `recommendation`, `raw_result`. CWE와 권고는 분석 당시 DiagnosticRule 값을 복사한 스냅샷이다.
 
 ### finding_workflows
 
@@ -40,7 +40,7 @@
 
 ### diagnostic_rules
 
-`id` PK, `catalog_rule_id` FK rules.id, `language`, `semgrep_rule_id` UNIQUE, `is_active`, `created_at`, `updated_at`.
+`id` PK, `catalog_rule_id` FK rules.id, `language`, `semgrep_rule_id` UNIQUE, `primary_cwe_id`, `related_cwe_ids` JSON, `cwe_mapping_confidence`, `remediation_guidance`, `is_active`, `created_at`, `updated_at`.
 
 KISA 카탈로그 항목과 언어별 Semgrep Rule ID를 분리한다. 하나의 카탈로그 항목에는 언어별 진단 규칙을 여러 개 둘 수 있으며, 같은 카탈로그 항목에 같은 언어를 중복 등록할 수 없다.
 
@@ -78,7 +78,7 @@ FindingRevalidation의 원본 Finding과 새 AnalysisRun은 같은 프로젝트�
 
 Rule의 `standard_id`는 고유하며 `item_number`는 1 이상의 공식 항목 번호를 저장한다. 비활성 Rule은 기존 Finding 관계를 유지하며 물리 삭제하지 않는다.
 
-DiagnosticRule은 카탈로그의 공식 ID·명칭을 복제하지 않는다. 카탈로그 상세와 분석 결과의 기준 정보는 항상 `rules`에서 가져오며, DiagnosticRule은 언어별 엔진 매핑만 관리한다.
+DiagnosticRule은 카탈로그의 공식 ID·명칭을 복제하지 않는다. 카탈로그 상세와 분석 결과의 기준 정보는 항상 `rules`에서 가져오며, DiagnosticRule은 언어별 엔진 매핑과 그 탐지 패턴에 직접 대응하는 CWE·조치 권고를 관리한다. CWE 형식은 `CWE-숫자`이며 관련 CWE는 근거가 있을 때만 중복 없이 저장한다.
 
 ## Schema Change Policy
 
@@ -96,6 +96,7 @@ DiagnosticRule은 카탈로그의 공식 ID·명칭을 복제하지 않는다. �
 - 버전 11은 `finding_workflows`에 nullable `assignee_id`와 `due_date`를 추가한다. 기존 조치 상태·의견·변경 정보는 유지하고 기존 행은 담당자와 기한이 없는 상태로 둔다.
 - 버전 12는 `finding_revalidations` 테이블과 FK·고유 제약을 생성한다. 기존 Finding과 조치 상태는 변경하지 않는다.
 - 버전 13은 `projects`에 nullable JSON `source_summary`를 추가한다. 기존 프로젝트는 요약이 없는 상태로 유지하며 다음 ZIP 업로드 성공 시 생성한다.
+- 버전 14는 `diagnostic_rules`와 `findings`에 CWE 필드를 추가하고 DiagnosticRule에 조치 권고를 추가한다. 승인된 29개 Rule ID를 seed하고 기존 Finding은 원본 결과의 Rule ID가 정확히 일치할 때만 CWE 스냅샷을 채운다.
 
 ## Deletion Policy
 

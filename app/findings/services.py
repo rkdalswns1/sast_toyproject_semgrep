@@ -119,7 +119,7 @@ def persist_normalized_findings(
     }
     rules_by_standard_id = {rule.standard_id: rule for rule in rules}
     active_mappings = {
-        (mapping.catalog_rule_id, mapping.semgrep_rule_id): mapping.language
+        (mapping.catalog_rule_id, mapping.semgrep_rule_id): mapping
         for mapping in session.scalars(
             select(DiagnosticRule).where(
                 DiagnosticRule.catalog_rule_id.in_([rule.id for rule in rules]),
@@ -152,7 +152,7 @@ def persist_normalized_findings(
             if isinstance(check_id, str)
             else set()
         )
-        mapping_language = next(
+        diagnostic_mapping = next(
             (
                 active_mappings[(rule.id, candidate)]
                 for candidate in check_id_candidates
@@ -160,8 +160,9 @@ def persist_normalized_findings(
             ),
             None,
         )
-        if mapping_language is None:
+        if diagnostic_mapping is None:
             continue
+        mapping_language = diagnostic_mapping.language
         if mapping_language.value not in rule.supported_languages:
             continue
 
@@ -180,9 +181,11 @@ def persist_normalized_findings(
         confidence = _enum_or_default(
             Confidence, metadata.get("confidence"), Confidence.MEDIUM
         )
-        recommendation = metadata.get("recommendation")
-        if not isinstance(recommendation, str):
-            recommendation = None
+        recommendation = diagnostic_mapping.remediation_guidance
+        if recommendation is None:
+            recommendation = metadata.get("recommendation")
+            if not isinstance(recommendation, str):
+                recommendation = None
         evidence_lines = extra.get("lines")
         evidence = {"lines": evidence_lines} if isinstance(evidence_lines, str) else None
         normalized_file_path = _normalized_path(item.get("path"), source_root)
@@ -198,6 +201,9 @@ def persist_normalized_findings(
                 language=mapping_language,
                 severity=severity,
                 confidence=confidence,
+                primary_cwe_id=diagnostic_mapping.primary_cwe_id,
+                related_cwe_ids=list(diagnostic_mapping.related_cwe_ids),
+                cwe_mapping_confidence=diagnostic_mapping.cwe_mapping_confidence,
                 file_path=normalized_file_path,
                 start_line=_required_line(item.get("start"), "시작"),
                 start_column=_optional_column(item.get("start")),

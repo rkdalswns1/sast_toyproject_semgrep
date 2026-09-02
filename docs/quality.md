@@ -44,6 +44,7 @@ Semgrep 규칙은 `app/rules/semgrep/kisa-2021/` 아래에 KISA 진단 항목별
 - 심각도와 신뢰도
 - 상대 파일 경로, 시작·종료 줄과 열
 - 메시지, 근거 코드와 권고
+- 주요 CWE, 관련 CWE와 매핑 확신 수준
 - 정규화 전 Semgrep 단일 결과 객체
 
 절대 작업 경로와 경로 탈출 결과는 저장하지 않는다. `Finding.file_path`와 `Finding.raw_result.path`는 모두 업로드 소스 루트 기준 상대경로로 정규화한다. 그 밖의 Semgrep 단일 결과 필드는 원본 구조를 유지한다. 카탈로그에 매핑되지 않은 Semgrep 결과는 임의 Rule을 생성하지 않고 제외한다.
@@ -54,6 +55,7 @@ Semgrep 규칙은 `app/rules/semgrep/kisa-2021/` 아래에 KISA 진단 항목별
 - 단일 언어와 통합 분석 모두 Finding 언어는 Semgrep Rule ID와 일치하는 활성 DiagnosticRule에서 파생하며 호출자가 임의 값으로 지정하지 않는다.
 - Finding은 실제 분석 언어에 해당하고 카탈로그 Rule이 지원하는 활성 DiagnosticRule에만 연결한다.
 - Finding의 Rule 이름, 기준 ID, 언어, 심각도와 신뢰도는 분석 시점 스냅샷으로 보존한다.
+- Finding의 CWE와 조치 권고는 매칭된 DiagnosticRule에서만 가져와 분석 시점 스냅샷으로 보존한다.
 - FindingWorkflow는 Finding과 1:1이며 탐지 원본을 수정하지 않고 후속 조치 상태만 분리해 저장한다.
 - FindingWorkflow 담당자는 Finding의 프로젝트에 할당된 활성 사용자만 허용하며, 기한 초과는 저장값이 아니라 조치 기한과 최신 상태로 계산한다.
 - FindingRevalidation은 원본 Finding과 같은 프로젝트의 새 AnalysisRun만 연결하고, 비교 결과와 관계없이 원본 FindingWorkflow를 변경하지 않는다.

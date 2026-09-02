@@ -24,6 +24,7 @@ from app.projects.access import accessible_project_or_404
 from app.projects.services import (
     ProjectManagementError,
     create_project,
+    delete_project,
     replace_project_members,
     update_project,
 )
@@ -310,3 +311,27 @@ async def update_project_users(
     except ProjectManagementError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
     return _redirect(f"/projects/{project_id}/users", request)
+
+
+@router.post("/projects/{project_id}/delete")
+async def delete_project_page(
+    project_id: int,
+    request: Request,
+    submitted_csrf_token: Annotated[str, Form(alias="csrf_token")] = "",
+    session: Session = Depends(get_db),
+) -> RedirectResponse:
+    _csrf_or_403(request, submitted_csrf_token)
+    admin = _require_super_admin(request, session)
+    if isinstance(admin, RedirectResponse):
+        return admin
+    accessible_project_or_404(session, project_id, admin)
+    try:
+        session.rollback()
+        delete_project(
+            session,
+            project_id=project_id,
+            upload_dir=request.app.state.settings.upload_dir,
+        )
+    except ProjectManagementError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return _redirect("/projects", request)
