@@ -282,6 +282,48 @@ def _add_finding_assignment_and_due_date(connection: Connection) -> None:
     )
 
 
+def _add_finding_revalidations(connection: Connection) -> None:
+    """Create immutable Finding-to-new-analysis comparison history."""
+    connection.execute(
+        text(
+            "CREATE TABLE IF NOT EXISTS finding_revalidations ("
+            "id INTEGER NOT NULL PRIMARY KEY, "
+            "source_finding_id INTEGER NOT NULL, "
+            "analysis_run_id INTEGER NOT NULL, "
+            "matched_finding_id INTEGER, "
+            "result VARCHAR(20) NOT NULL, "
+            "executed_by INTEGER NOT NULL, "
+            "created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, "
+            "CONSTRAINT uq_finding_revalidation_run UNIQUE "
+            "(source_finding_id, analysis_run_id), "
+            "CONSTRAINT revalidation_result CHECK (result IN ("
+            "'STILL_DETECTED', 'LIKELY_RESOLVED', 'REVIEW_REQUIRED'"
+            ")), "
+            "FOREIGN KEY(source_finding_id) REFERENCES findings(id) "
+            "ON DELETE CASCADE, "
+            "FOREIGN KEY(analysis_run_id) REFERENCES analysis_runs(id) "
+            "ON DELETE CASCADE, "
+            "FOREIGN KEY(matched_finding_id) REFERENCES findings(id) "
+            "ON DELETE SET NULL, "
+            "FOREIGN KEY(executed_by) REFERENCES users(id) ON DELETE RESTRICT"
+            ")"
+        )
+    )
+    for column_name in (
+        "source_finding_id",
+        "analysis_run_id",
+        "matched_finding_id",
+        "executed_by",
+    ):
+        connection.execute(
+            text(
+                f"CREATE INDEX IF NOT EXISTS "
+                f"ix_finding_revalidations_{column_name} "
+                f"ON finding_revalidations ({column_name})"
+            )
+        )
+
+
 SCHEMA_MIGRATIONS: tuple[SchemaMigration, ...] = (
     SchemaMigration(1, "Initial SAST domain schema baseline", _record_initial_schema),
     SchemaMigration(
@@ -334,6 +376,11 @@ SCHEMA_MIGRATIONS: tuple[SchemaMigration, ...] = (
         11,
         "Add Finding assignee and remediation due date",
         _add_finding_assignment_and_due_date,
+    ),
+    SchemaMigration(
+        12,
+        "Add Finding revalidation history",
+        _add_finding_revalidations,
     ),
 )
 

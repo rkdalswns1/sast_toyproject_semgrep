@@ -13,6 +13,7 @@ from app.db.models.types import persisted_enum
 
 if TYPE_CHECKING:
     from app.db.models.analysis_run import AnalysisRun
+    from app.db.models.finding_revalidation import FindingRevalidation
     from app.db.models.finding_workflow import FindingWorkflow
     from app.db.models.rule import Rule
 
@@ -59,4 +60,15 @@ class Finding(Base):
         cascade="all, delete-orphan",
         passive_deletes=True,
         uselist=False,
+    )
+    revalidations: Mapped[list[FindingRevalidation]] = relationship(
+        back_populates="source_finding",
+        foreign_keys="FindingRevalidation.source_finding_id",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
+    matched_revalidations: Mapped[list[FindingRevalidation]] = relationship(
+        back_populates="matched_finding",
+        foreign_keys="FindingRevalidation.matched_finding_id",
+        passive_deletes=True,
     )

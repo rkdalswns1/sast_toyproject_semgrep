@@ -51,6 +51,8 @@ ZIP upload → safe extraction → registered-language detection → Semgrep
 
 Finding의 탐지 원본과 조치 관리는 분리한다. `FindingWorkflow`는 최신 상태·의견·담당자·기한만 보관하고, 기한 초과 여부는 조회 시 현재 날짜와 상태로 계산한다.
 
+Finding 재검증은 기존 분석 파이프라인을 재사용하여 항상 새 AnalysisRun과 Finding을 만든다. 원본과 새 결과의 비교 이력은 `FindingRevalidation`에 저장하고 원본 Finding 및 FindingWorkflow는 수정하지 않는다.
+
 CSV와 PDF 보고서는 AnalysisRun, Project, Finding, FindingWorkflow를 읽어 공통 보고서 스냅샷으로 변환한 뒤 요청 시 메모리에서 생성한다. 보고서 생성은 DB를 변경하지 않으며 원본 Semgrep JSON과 시스템 경로를 출력 계층에 전달하지 않는다.
 
 분석은 MVP에서 HTTP 요청 안에서 동기 실행한다. 분석 요청을 받으면 AnalysisRun을 `RUNNING` 상태로 변경하고 Semgrep을 실행한다. 성공하면 `COMPLETED`, 오류 또는 시간초과가 발생하면 `FAILED`로 변경한다.

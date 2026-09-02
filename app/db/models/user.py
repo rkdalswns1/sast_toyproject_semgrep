@@ -14,6 +14,7 @@ from app.db.models.types import persisted_enum
 
 if TYPE_CHECKING:
     from app.db.models.analysis_run import AnalysisRun
+    from app.db.models.finding_revalidation import FindingRevalidation
     from app.db.models.finding_workflow import FindingWorkflow
     from app.db.models.project import Project, ProjectUser
 
@@ -51,4 +52,7 @@ class User(TimestampMixin, Base):
     )
     assigned_finding_workflows: Mapped[list[FindingWorkflow]] = relationship(
         back_populates="assignee", foreign_keys="FindingWorkflow.assignee_id"
+    )
+    finding_revalidations: Mapped[list[FindingRevalidation]] = relationship(
+        back_populates="executor", foreign_keys="FindingRevalidation.executed_by"
     )

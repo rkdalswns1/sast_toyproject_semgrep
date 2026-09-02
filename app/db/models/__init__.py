@@ -3,6 +3,7 @@
 from app.db.models.analysis_run import AnalysisRun
 from app.db.models.diagnostic_rule import DiagnosticRule
 from app.db.models.finding import Finding
+from app.db.models.finding_revalidation import FindingRevalidation
 from app.db.models.finding_workflow import FindingWorkflow
 from app.db.models.project import Project, ProjectUser
 from app.db.models.rule import Rule
@@ -13,6 +14,7 @@ __all__ = [
     "AnalysisRun",
     "DiagnosticRule",
     "Finding",
+    "FindingRevalidation",
     "FindingWorkflow",
     "Project",
     "ProjectUser",

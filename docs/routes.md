@@ -62,9 +62,12 @@ ZIP 파일이 포함된 POST는 선택 입력인 `source_version`, `deployment_v
 GET /analysis/{analysis_id}/findings
 GET /findings/{finding_id}
 POST /findings/{finding_id}/status
+POST /findings/{finding_id}/revalidate
 ```
 
 Finding 목록은 `severity`, `confidence`, `status`, `assignee_id`, `overdue` query parameter를 지원한다. `overdue`는 `true` 또는 `false`만 허용한다. 권한이 없는 프로젝트나 분석 ID는 정보 노출을 막기 위해 404로 처리한다. 상태 변경 POST는 상태·의견·담당자·조치 기한을 함께 갱신하며 SUPER_ADMIN 또는 해당 프로젝트에 할당된 PROJECT_MANAGER만 사용할 수 있고 CSRF 검증을 적용한다. 담당자는 해당 프로젝트에 할당된 활성 사용자만 선택할 수 있다.
+
+재검증 POST는 현재 프로젝트에 저장된 최신 소스로 새 AnalysisRun을 실행한 뒤 원본 Finding과 비교한다. SUPER_ADMIN 또는 해당 프로젝트의 PROJECT_MANAGER만 사용할 수 있고 CSRF 검증을 적용한다. 완료 후 원본 Finding 상세로 돌아가며 재검증 이력에서 새 분석과 일치 Finding을 조회할 수 있다.
 
 ## Rules
 

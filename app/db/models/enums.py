@@ -44,6 +44,12 @@ class FindingStatus(str, Enum):
     ACCEPTED_RISK = "ACCEPTED_RISK"
 
 
+class RevalidationResult(str, Enum):
+    STILL_DETECTED = "STILL_DETECTED"
+    LIKELY_RESOLVED = "LIKELY_RESOLVED"
+    REVIEW_REQUIRED = "REVIEW_REQUIRED"
+
+
 class Language(str, Enum):
     JAVA = "JAVA"
     JAVASCRIPT = "JAVASCRIPT"

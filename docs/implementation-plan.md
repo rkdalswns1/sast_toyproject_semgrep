@@ -241,3 +241,24 @@ Finding의 최신 조치 정보에 담당자와 조치 기한을 추가한다. �
 - Finding 목록에서 담당자와 기한 초과 여부를 필터링 가능
 - 완료·오탐·위험 수용 상태는 기한이 지나도 기한 초과로 표시하지 않음
 - DB 마이그레이션, CSRF, 권한 및 전체 회귀 시험 통과
+
+## Phase 17 — Finding Revalidation
+
+기존 Finding 상세에서 최신 업로드 소스를 대상으로 새 Semgrep 분석을 실행하고, 새 AnalysisRun의 Finding과 원본 Finding을 비교해 재검증 결과를 기록한다. 비교 기준은 `KISA ID + 언어 + Semgrep Rule ID + 상대 파일 경로`이며 줄 번호 변화는 동일 취약점 판단에 사용하지 않는다.
+
+- 모든 비교 키가 일치하면 `STILL_DETECTED`(여전히 탐지됨)
+- 정확히 일치하지 않지만 새 실행에 같은 KISA 항목이 있으면 `REVIEW_REQUIRED`(확인 필요)
+- 새 실행에 같은 KISA 항목이 없으면 `LIKELY_RESOLVED`(해결 추정)
+- 새 분석이 실패하면 `REVIEW_REQUIRED`
+
+재검증은 기존 Finding의 조치 상태를 자동으로 변경하지 않는다. 해결 추정은 사람이 새 분석과 소스 변경을 확인한 뒤 조치 상태를 변경하기 위한 참고 결과다. 새 분석에서 발견된 다른 취약점은 일반 Finding으로 저장한다. SUPER_ADMIN과 해당 프로젝트에 할당된 PROJECT_MANAGER만 실행하고, 프로젝트 접근 권한이 있는 USER는 재검증 이력을 읽기 전용으로 조회한다.
+
+완료조건:
+
+- 재검증마다 새 AnalysisRun과 원본 Finding 연결, 결과, 실행 계정, 실행 시각 저장
+- 동일 위치 재탐지·위치 변경·미탐지·분석 실패 결과 구분
+- 재검증 과정의 신규 취약점도 새 AnalysisRun의 일반 Finding으로 보존
+- 기존 FindingWorkflow 상태를 자동 변경하지 않음
+- SUPER_ADMIN과 담당 PROJECT_MANAGER만 실행 가능하며 CSRF 적용
+- USER 읽기 전용 및 미할당 사용자 404 유지
+- 기존 DB 마이그레이션, 비교 로직, 권한과 전체 회귀 시험 통과

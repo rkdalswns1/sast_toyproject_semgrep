@@ -8,11 +8,13 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
+from app.analysis.service import AnalysisExecutionError
 from app.auth.dependencies import can_operate_project, current_active_user, get_db
 from app.auth.session import csrf_is_valid, csrf_token, persist_session
 from app.db.models.analysis_run import AnalysisRun
 from app.db.models.enums import Confidence, FindingStatus, Severity
 from app.db.models.finding import Finding
+from app.db.models.finding_revalidation import FindingRevalidation
 from app.db.models.finding_workflow import FindingWorkflow
 from app.db.models.project import ProjectUser
 from app.db.models.user import User
@@ -22,6 +24,10 @@ from app.findings.services import (
     FindingWorkflowError,
     is_workflow_overdue,
     update_finding_workflow,
+)
+from app.findings.revalidation import (
+    FindingRevalidationError,
+    execute_finding_revalidation,
 )
 
 
@@ -33,6 +39,12 @@ FINDING_STATUS_LABELS = {
     FindingStatus.RESOLVED: "조치 완료",
     FindingStatus.FALSE_POSITIVE: "오탐",
     FindingStatus.ACCEPTED_RISK: "위험 수용",
+}
+
+REVALIDATION_RESULT_LABELS = {
+    "STILL_DETECTED": "여전히 탐지됨",
+    "LIKELY_RESOLVED": "해결 추정",
+    "REVIEW_REQUIRED": "확인 필요",
 }
 
 
@@ -98,6 +110,38 @@ def _active_project_users(session: Session, project_id: int) -> list[User]:
             .order_by(User.username)
         ).all()
     )
+
+
+def _finding_detail_context(
+    session: Session,
+    *,
+    finding: Finding,
+    analysis_run: AnalysisRun,
+    user: User,
+    revalidation_error: str | None = None,
+) -> dict[str, object]:
+    raw_result = dict(finding.raw_result)
+    raw_result["path"] = finding.file_path
+    revalidations = session.scalars(
+        select(FindingRevalidation)
+        .where(FindingRevalidation.source_finding_id == finding.id)
+        .order_by(FindingRevalidation.id.desc())
+    ).all()
+    return {
+        "finding": finding,
+        "analysis_run": analysis_run,
+        "raw_result_json": json.dumps(raw_result, ensure_ascii=False, indent=2),
+        "current_user": user,
+        "can_manage_finding": can_operate_project(user),
+        "status_values": list(FindingStatus),
+        "status_labels": FINDING_STATUS_LABELS,
+        "project_users": _active_project_users(session, analysis_run.project_id),
+        "is_overdue": is_workflow_overdue(finding.workflow),
+        "workflow_error": None,
+        "revalidations": revalidations,
+        "revalidation_result_labels": REVALIDATION_RESULT_LABELS,
+        "revalidation_error": revalidation_error,
+    }
 
 
 @router.get("/analysis/{analysis_id}/findings", response_class=HTMLResponse)
@@ -200,25 +244,15 @@ async def finding_detail(
     if analysis_run is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
     accessible_project_or_404(session, analysis_run.project_id, user)
-    raw_result = dict(finding.raw_result)
-    raw_result["path"] = finding.file_path
     return _render(
         request,
         "findings/detail.html",
-        {
-            "finding": finding,
-            "analysis_run": analysis_run,
-            "raw_result_json": json.dumps(raw_result, ensure_ascii=False, indent=2),
-            "current_user": user,
-            "can_manage_finding": can_operate_project(user),
-            "status_values": list(FindingStatus),
-            "status_labels": FINDING_STATUS_LABELS,
-            "project_users": _active_project_users(
-                session, analysis_run.project_id
-            ),
-            "is_overdue": is_workflow_overdue(finding.workflow),
-            "workflow_error": None,
-        },
+        _finding_detail_context(
+            session,
+            finding=finding,
+            analysis_run=analysis_run,
+            user=user,
+        ),
     )
 
 
@@ -280,4 +314,63 @@ async def update_finding_status(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)
         ) from exc
+    return _redirect(f"/findings/{finding_id}", request)
+
+
+@router.post("/findings/{finding_id}/revalidate", response_class=HTMLResponse)
+async def revalidate_finding(
+    finding_id: int,
+    request: Request,
+    submitted_csrf_token: str = "",
+    session: Session = Depends(get_db),
+) -> Response:
+    form = await request.form()
+    submitted_csrf_token = str(form.get("csrf_token", submitted_csrf_token))
+    if not csrf_is_valid(request, submitted_csrf_token):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN)
+    user = _require_user(request, session)
+    if isinstance(user, RedirectResponse):
+        return user
+    finding = session.get(Finding, finding_id)
+    if finding is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+    analysis_run = session.get(AnalysisRun, finding.analysis_run_id)
+    if analysis_run is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+    accessible_project_or_404(session, analysis_run.project_id, user)
+    if not can_operate_project(user):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN)
+
+    user_id = user.id
+    session.rollback()
+    try:
+        execute_finding_revalidation(
+            session,
+            source_finding_id=finding_id,
+            executed_by=user_id,
+            settings=request.app.state.settings,
+        )
+    except (AnalysisExecutionError, FindingRevalidationError) as exc:
+        session.rollback()
+        finding = session.get(Finding, finding_id)
+        if finding is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND) from exc
+        analysis_run = session.get(AnalysisRun, finding.analysis_run_id)
+        if analysis_run is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND) from exc
+        user = session.get(User, user_id)
+        if user is None:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN) from exc
+        return _render(
+            request,
+            "findings/detail.html",
+            _finding_detail_context(
+                session,
+                finding=finding,
+                analysis_run=analysis_run,
+                user=user,
+                revalidation_error=str(exc),
+            ),
+            status_code=status.HTTP_400_BAD_REQUEST,
+        )
     return _redirect(f"/findings/{finding_id}", request)

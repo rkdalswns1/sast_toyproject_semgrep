@@ -10,6 +10,7 @@ from app.db.models import (
     AnalysisRun,
     DiagnosticRule,
     Finding,
+    FindingRevalidation,
     FindingWorkflow,
     Project,
     ProjectUser,
@@ -37,6 +38,7 @@ EXPECTED_TABLES = {
     "rules",
     "findings",
     "finding_workflows",
+    "finding_revalidations",
     "diagnostic_rules",
     "schema_versions",
 }
@@ -60,6 +62,12 @@ EXPECTED_FOREIGN_KEYS = {
         ("finding_id", "findings", "id", "CASCADE"),
         ("updated_by", "users", "id", "RESTRICT"),
         ("assignee_id", "users", "id", "RESTRICT"),
+    },
+    "finding_revalidations": {
+        ("source_finding_id", "findings", "id", "CASCADE"),
+        ("analysis_run_id", "analysis_runs", "id", "CASCADE"),
+        ("matched_finding_id", "findings", "id", "SET NULL"),
+        ("executed_by", "users", "id", "RESTRICT"),
     },
 }
 
@@ -98,12 +106,12 @@ def test_create_all_builds_domain_tables_schema_history_and_foreign_keys(
         versions = session.scalars(
             select(SchemaVersion).order_by(SchemaVersion.version)
         ).all()
-        assert [version.version for version in versions] == [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
+        assert [version.version for version in versions] == [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
         assert all(version.description and version.applied_at for version in versions)
 
     initialize_database(engine)
     with Session(engine) as session:
-        assert session.scalar(select(func.count()).select_from(SchemaVersion)) == 11
+        assert session.scalar(select(func.count()).select_from(SchemaVersion)) == 12
 
     engine.dispose()
 
@@ -157,7 +165,7 @@ def test_existing_database_is_upgraded_and_migration_is_recorded(
         assert legacy_rule.is_active is True
         assert session.scalars(
             select(SchemaVersion.version).order_by(SchemaVersion.version)
-        ).all() == [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
+        ).all() == [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
 
     engine.dispose()
 
@@ -264,6 +272,7 @@ def test_legacy_admin_roles_are_migrated_without_breaking_project_relations(
         assert session.get(SchemaVersion, 9) is not None
         assert session.get(SchemaVersion, 10) is not None
         assert session.get(SchemaVersion, 11) is not None
+        assert session.get(SchemaVersion, 12) is not None
 
     engine.dispose()
 
@@ -577,6 +586,30 @@ def test_phase16_migration_adds_nullable_assignment_to_existing_workflow_table(
     engine.dispose()
 
 
+def test_phase17_migration_creates_revalidation_history_table(
+    tmp_path: Path,
+) -> None:
+    engine = create_db_engine(f"sqlite:///{tmp_path / 'phase17-upgrade.db'}")
+    initialize_database(engine)
+    with engine.begin() as connection:
+        connection.execute(text("DELETE FROM schema_versions WHERE version = 12"))
+        connection.execute(text("DROP TABLE finding_revalidations"))
+
+    initialize_database(engine)
+    inspector = inspect(engine)
+    assert "finding_revalidations" in inspector.get_table_names()
+    assert _foreign_keys(inspector, "finding_revalidations") == (
+        EXPECTED_FOREIGN_KEYS["finding_revalidations"]
+    )
+    with Session(engine) as session:
+        assert session.get(SchemaVersion, 12) is not None
+        assert session.scalar(
+            select(func.count()).select_from(FindingRevalidation)
+        ) == 0
+
+    engine.dispose()
+
+
 def test_documented_enum_constraints_are_created(tmp_path: Path) -> None:
     engine = create_db_engine(f"sqlite:///{tmp_path / 'enums.db'}")
     initialize_database(engine)
@@ -600,6 +633,7 @@ def test_documented_enum_constraints_are_created(tmp_path: Path) -> None:
         "finding_severity",
         "finding_confidence",
         "finding_status",
+        "revalidation_result",
         "rule_item_number_positive",
     } <= constraint_names
 

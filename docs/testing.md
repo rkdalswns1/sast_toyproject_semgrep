@@ -1,6 +1,6 @@
 # Test Contract
 
-이 문서는 RFP TST-001~008의 시험 데이터, 기대 결과와 실행 방법을 정의한다.
+이 문서는 RFP TST-001~008과 후속 Phase의 TST-009 시험 데이터, 기대 결과와 실행 방법을 정의한다.
 
 ## Isolation
 
@@ -15,6 +15,7 @@
 - Phase 13 업그레이드 시험은 마이그레이션 버전 9가 기존 Finding에 기본 `OPEN` 워크플로를 추가하고 FK 관계를 유지하는지 확인한다.
 - Phase 14 업그레이드 시험은 마이그레이션 버전 10이 기존 프로젝트에 nullable 소스 버전·배포 버전·설명 컬럼을 추가하고 기존 관계를 유지하는지 확인한다.
 - Phase 16 업그레이드 시험은 마이그레이션 버전 11이 기존 FindingWorkflow에 nullable 담당자·조치 기한 컬럼을 추가하고 기존 조치 정보를 유지하는지 확인한다.
+- Phase 17 업그레이드 시험은 마이그레이션 버전 12가 기존 Finding과 조치 상태를 변경하지 않고 재검증 이력 테이블을 추가하는지 확인한다.
 
 ## Diagnostic Samples
 
@@ -59,6 +60,7 @@ tests/samples/
 | TST-006 | 49개 전체 필수 필드와 구현 상태 | `tests/test_rule_catalog.py` |
 | TST-007 | 상태·저장·필터·상세·Rule FK·상대경로 정규화 | `tests/test_findings.py`, `tests/test_rule_catalog.py`, `tests/test_end_to_end.py` |
 | TST-008 | 잘못된 대상·실행 오류·수정 후 재실행 | `tests/test_analysis_execution.py` |
+| TST-009 | Finding 재검증 결과·이력·권한·조치 상태 불변 | `tests/test_revalidation.py` |
 
 실행 오류 시험은 Semgrep의 제한된 표준 오류가 실패 실행에 저장되는지, 오류 로그 상한을 초과하면 프로세스 그룹이 종료되는지, 저장된 원문이 SUPER_ADMIN과 해당 프로젝트의 PROJECT_MANAGER에게만 표시되는지를 포함한다.
 
@@ -73,6 +75,8 @@ Phase 14 시험은 ZIP 업로드 메타데이터의 공백 정리·길이 제한
 Phase 15 시험은 CSV·PDF의 필수 메타데이터, 심각도별 집계, Finding·조치 필드, Finding 0건, 한글 출력과 다운로드 헤더를 검증한다. CSV 수식 주입 접두사는 이스케이프되어야 하고 두 형식에 원본 JSON, 내부 오류와 시스템 절대경로가 없어야 한다. 세 역할의 할당된 프로젝트 다운로드와 미할당 사용자의 `404`를 확인한다. PDF는 Poppler로 PNG 렌더링하고 텍스트 추출을 병행하여 한글과 페이지 구성을 검수한다.
 
 Phase 16 시험은 담당자·조치 기한 저장, 프로젝트에 할당되지 않았거나 비활성인 사용자 지정 거부, CSRF와 역할 제한, USER 읽기 전용을 검증한다. `OPEN`·`IN_PROGRESS`의 지난 기한만 기한 초과로 표시하고 완료·오탐·위험 수용 상태는 제외하며 담당자·기한 초과 목록 필터를 확인한다.
+
+Phase 17 시험은 최신 소스로 새 AnalysisRun이 생성되는지와 비교 키가 동일한 경우 `STILL_DETECTED`, 같은 KISA 항목이 다른 위치에 있는 경우 `REVIEW_REQUIRED`, 같은 KISA 항목이 없는 경우 `LIKELY_RESOLVED`, 분석 실패 시 `REVIEW_REQUIRED`가 기록되는지 검증한다. 새 취약점은 일반 Finding으로 남고 원본 조치 상태는 자동 변경되지 않아야 한다. CSRF, 운영 역할, USER 읽기 전용과 미할당 404도 확인한다.
 
 SFR-012 등록 시험은 SUPER_ADMIN의 KISA 항목·언어별 Semgrep Rule ID 등록과 수정, DB 지속성, PROJECT_MANAGER·USER 접근 차단 및 중복 Rule ID 거부를 검증한다. YAML의 문법과 탐지 동작은 실제 Semgrep 진단 예제 시험이 담당한다.
 
@@ -112,3 +116,4 @@ RFP TST 핵심 시험:
 11. ZIP 업로드 시 소스 버전·배포 버전·설명을 입력하고 프로젝트 상세과 분석 상세에 같은 값이 표시되는지 확인한다. 새 버전 ZIP을 업로드한 뒤 이전 분석 상세의 값이 유지되는지도 확인한다.
 12. 분석 상세에서 CSV와 PDF를 내려받아 프로젝트·버전·분석·Finding·조치 정보와 심각도별 집계를 확인한다. USER도 할당된 프로젝트 보고서는 받을 수 있고 미할당 프로젝트 보고서는 404인지 확인한다.
 13. 담당 PROJECT_MANAGER가 Finding에 프로젝트 사용자를 담당자로 지정하고 조치 기한을 입력한다. USER로 조회해 읽기 전용 표시를 확인하고, 지난 기한의 미완료 Finding만 목록에서 기한 초과로 필터링되는지 확인한다.
+14. 취약 코드를 유지한 최신 ZIP과 수정한 ZIP으로 각각 재검증하여 `여전히 탐지됨`과 `해결 추정`을 확인한다. 해결 추정 후에도 조치 상태가 자동 변경되지 않는지 확인하고 USER에게 실행 버튼이 없는지 확인한다.

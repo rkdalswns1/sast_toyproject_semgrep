@@ -56,6 +56,7 @@ Semgrep 규칙은 `app/rules/semgrep/kisa-2021/` 아래에 KISA 진단 항목별
 - Finding의 Rule 이름, 기준 ID, 언어, 심각도와 신뢰도는 분석 시점 스냅샷으로 보존한다.
 - FindingWorkflow는 Finding과 1:1이며 탐지 원본을 수정하지 않고 후속 조치 상태만 분리해 저장한다.
 - FindingWorkflow 담당자는 Finding의 프로젝트에 할당된 활성 사용자만 허용하며, 기한 초과는 저장값이 아니라 조치 기한과 최신 상태로 계산한다.
+- FindingRevalidation은 원본 Finding과 같은 프로젝트의 새 AnalysisRun만 연결하고, 비교 결과와 관계없이 원본 FindingWorkflow를 변경하지 않는다.
 - Project의 소스 메타데이터는 최신 ZIP을 나타내고 AnalysisRun provenance에는 실행 시점 값을 복사하여 이후 업로드와 독립적으로 보존한다.
 - CSV와 PDF는 같은 불변 보고서 스냅샷을 사용하여 필드와 집계가 형식별로 달라지지 않게 한다. 보고서 생성은 분석 원본과 DB 상태를 변경하지 않는다.
 - Project 삭제 시 하위 AnalysisRun과 Finding은 함께 삭제하고, 참조 중인 사용자와 Rule 삭제는 FK 정책으로 제한한다.

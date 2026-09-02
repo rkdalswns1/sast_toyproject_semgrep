@@ -34,6 +34,10 @@
 
 `finding_id` PK/FK findings.id, `status`, `note`, `assignee_id` FK users.id, `due_date`, `updated_by` FK users.id, `updated_at`. Finding과 1:1 관계이며 최신 조치 상태·담당자·기한을 저장한다. 기본 상태는 `OPEN`이고 최초 탐지 시 담당자·기한·변경자·변경 시각은 비어 있다.
 
+### finding_revalidations
+
+`id` PK, `source_finding_id` FK findings.id, `analysis_run_id` FK analysis_runs.id, `matched_finding_id` nullable FK findings.id, `result`, `executed_by` FK users.id, `created_at`. 원본 Finding에 대한 재검증 실행과 새 분석 결과의 비교 판단을 이력으로 저장한다. 같은 원본 Finding과 AnalysisRun 조합은 한 번만 저장한다.
+
 ### diagnostic_rules
 
 `id` PK, `catalog_rule_id` FK rules.id, `language`, `semgrep_rule_id` UNIQUE, `is_active`, `created_at`, `updated_at`.
@@ -56,6 +60,9 @@ KISA 카탈로그 항목과 언어별 Semgrep Rule ID를 분리한다. 하나의
 - Finding 1:1 FindingWorkflow
 - User 1:N FindingWorkflow through updated_by
 - User 1:N FindingWorkflow through assignee_id
+- Finding 1:N FindingRevalidation through source_finding_id
+- AnalysisRun 1:N FindingRevalidation
+- User 1:N FindingRevalidation through executed_by
 
 ## Integrity Rules
 
@@ -64,6 +71,8 @@ SQLite 연결마다 `PRAGMA foreign_keys=ON`을 적용한다.
 Finding은 반드시 하나의 AnalysisRun과 Rule에 연결된다.
 
 FindingWorkflow의 담당자는 해당 Finding이 속한 프로젝트의 활성 `project_users` 관계에 포함된 사용자만 지정한다. 기한 초과 여부는 저장하지 않고 `due_date`와 최신 상태를 조회 시 비교한다.
+
+FindingRevalidation의 원본 Finding과 새 AnalysisRun은 같은 프로젝트에 속해야 한다. `matched_finding_id`는 새 AnalysisRun에서 비교 키가 정확히 일치한 Finding만 참조한다. 재검증 결과는 FindingWorkflow 상태를 변경하지 않는다.
 
 혼합 언어 AnalysisRun에서도 Finding의 `language`는 매칭된 활성 DiagnosticRule의 실제 언어와 일치해야 한다. AnalysisRun의 기준 언어를 모든 Finding에 복사하지 않는다.
 
@@ -85,6 +94,7 @@ DiagnosticRule은 카탈로그의 공식 ID·명칭을 복제하지 않는다. �
 - 버전 9는 `finding_workflows` 테이블을 생성하고 기존 Finding에 기본 `OPEN` 상태를 추가한다. 기존 분석 결과와 Rule 관계는 변경하지 않는다.
 - 버전 10은 `projects`에 nullable `source_version`, `deployment_version`, `source_description`을 추가한다. 기존 프로젝트와 분석 실행은 값이 없는 상태로 유지한다.
 - 버전 11은 `finding_workflows`에 nullable `assignee_id`와 `due_date`를 추가한다. 기존 조치 상태·의견·변경 정보는 유지하고 기존 행은 담당자와 기한이 없는 상태로 둔다.
+- 버전 12는 `finding_revalidations` 테이블과 FK·고유 제약을 생성한다. 기존 Finding과 조치 상태는 변경하지 않는다.
 
 ## Deletion Policy
 
@@ -96,4 +106,5 @@ DiagnosticRule은 카탈로그의 공식 ID·명칭을 복제하지 않는다. �
 - 사용 중인 Rule은 삭제할 수 없다.
 - Finding이 참조하는 Rule에는 `RESTRICT` 정책을 사용한다.
 - Finding 삭제 시 FindingWorkflow를 함께 삭제하고, 상태 변경자 또는 담당자로 참조 중인 User 삭제는 제한한다.
+- 원본 Finding 또는 새 AnalysisRun 삭제 시 연결된 FindingRevalidation을 함께 삭제하고, 일치 Finding 삭제 시 `matched_finding_id`만 NULL로 변경한다. 실행자를 참조 중인 User 삭제는 제한한다.
 - `projects.created_by`와 `analysis_runs.executed_by`의 기록 보존을 위해 참조 중인 User의 물리 삭제를 제한한다.
