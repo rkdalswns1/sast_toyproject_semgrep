@@ -1,6 +1,0 @@
-Intentional deviations
-
-- Slides 3, 4, 6, 7: removed pen.dev mockup images because they differ from the current Jinja2/CSS implementation.
-- Slide 8: replaced the three-stage relative roadmap with one remaining implementation item: NOT_IMPLEMENTED diagnostic items.
-- Slide 10: removed expected Q&A and used the full slide for automated-test scope.
-- Output is a new revision; the original PPTX is preserved.
