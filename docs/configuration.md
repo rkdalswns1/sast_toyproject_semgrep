@@ -29,6 +29,7 @@ Phase 1에서 프로젝트 루트에 `.env.example`을 생성한다. 실제 `.en
 | `MAX_ARCHIVE_FILES` | 아니요 | `2000` | ZIP 내부 최대 파일 수 |
 | `MAX_SINGLE_FILE_BYTES` | 아니요 | `10485760` | 개별 파일 최대 10 MiB |
 | `GITHUB_DOWNLOAD_TIMEOUT_SECONDS` | 아니요 | `30` | 공개 GitHub API 및 archive 다운로드 제한 시간 |
+| `PROJECT_EXPIRY_SWEEP_SECONDS` | 아니요 | `3600` | 만료 프로젝트 자동 정리 간격(초) |
 | `SEMGREP_TIMEOUT_SECONDS` | 아니요 | `60` | Semgrep 실행 제한 시간 |
 | `SEMGREP_JOBS` | 아니요 | `2` | Semgrep 동시 분석 작업 수 |
 | `SEMGREP_MAX_MEMORY_MB` | 아니요 | `1024` | Semgrep 규칙별 최대 메모리 MiB |
@@ -94,6 +95,10 @@ ZIP 소스 메타데이터는 모두 선택 입력이다. `source_version`과 `d
 ZIP 소스 요약의 원본 파일명은 경로 성분을 제거해 최대 255자로 저장한다. 실제 압축 해제된 정규 파일의 소스 상대경로는 정렬한 뒤 최대 20개만 저장하며 파일 내용과 시스템 절대경로는 저장하지 않는다.
 
 GitHub 저장소 URL은 `https://github.com/{owner}/{repository}`만 허용한다. ref는 선택 입력이며 최대 255자이고 공백·제어문자와 위험한 Git ref 패턴을 허용하지 않는다. 저장소 URL, 요청 ref와 GitHub API로 확정한 40자리 commit SHA만 저장하며 토큰·쿠키 등 인증정보는 받거나 저장하지 않는다.
+
+프로젝트 만료일은 선택적인 `YYYY-MM-DD` 날짜이며 SUPER_ADMIN만 변경한다. 애플리케이션 로컬 날짜가 만료일과 같거나 이후이면 만료된 것으로 처리한다. 자동 정리는 시작 시 한 번 실행하고 `PROJECT_EXPIRY_SWEEP_SECONDS` 간격으로 반복한다.
+
+오탐 suppression의 근거 코드 지문은 줄바꿈을 LF로 통일하고 각 줄의 끝 공백과 전체 앞뒤 공백을 제거한 UTF-8 문자열의 SHA-256이다. 원문 코드와 시스템 절대경로는 suppression 테이블에 저장하지 않는다.
 
 ## Bootstrap Super Administrator
 

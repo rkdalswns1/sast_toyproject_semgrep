@@ -195,6 +195,55 @@ def _sync_phase11_builtin_rule_metadata(connection: Connection) -> None:
         )
 
 
+def _sync_phase23_builtin_rule_metadata(connection: Connection) -> None:
+    """Enable the approved Phase 23 catalog rows on existing databases."""
+    implemented_rules = {
+        "제1절-2": (
+            ["JAVA", "JAVASCRIPT", "PYTHON"],
+            "kisa-2021-code-injection-python",
+            "HIGH",
+        ),
+        "제2절-7": (
+            ["JAVA", "JAVASCRIPT", "PYTHON"],
+            "kisa-2021-insufficient-key-length-python",
+            "MEDIUM",
+        ),
+        "제6절-3": (
+            ["JAVA"],
+            "kisa-2021-private-array-returned-java",
+            "INFO",
+        ),
+        "제6절-4": (
+            ["JAVA"],
+            "kisa-2021-public-array-assigned-java",
+            "INFO",
+        ),
+        "제7절-2": (
+            ["JAVA"],
+            "kisa-2021-system-exit-in-servlet-java",
+            "MEDIUM",
+        ),
+    }
+    for standard_id, (languages, semgrep_rule_id, severity) in implemented_rules.items():
+        connection.execute(
+            text(
+                "UPDATE rules "
+                "SET supported_languages = :supported_languages, "
+                "implementation_status = 'PARTIAL', "
+                "semgrep_rule_id = :semgrep_rule_id, severity = :severity "
+                "WHERE standard_id = :standard_id "
+                "AND implementation_status = 'NOT_IMPLEMENTED' "
+                "AND supported_languages = '[]'"
+            ),
+            {
+                "standard_id": standard_id,
+                "supported_languages": json.dumps(languages),
+                "semgrep_rule_id": semgrep_rule_id,
+                "severity": severity,
+            },
+        )
+
+
 def _add_multi_language_project_mode(connection: Connection) -> None:
     """Add an opt-in scan mode while preserving existing project behavior."""
     columns = {
@@ -446,6 +495,81 @@ def _add_public_github_source_metadata(connection: Connection) -> None:
             )
 
 
+def _add_project_expiration_and_finding_suppressions(connection: Connection) -> None:
+    """Add project expiry and exact-code false-positive suppression storage."""
+    project_columns = {
+        column["name"] for column in inspect(connection).get_columns("projects")
+    }
+    if "expires_on" not in project_columns:
+        connection.execute(text("ALTER TABLE projects ADD COLUMN expires_on DATE"))
+
+    connection.execute(
+        text(
+            "CREATE TABLE IF NOT EXISTS finding_suppressions ("
+            "id INTEGER NOT NULL PRIMARY KEY, "
+            "project_id INTEGER NOT NULL, language VARCHAR(20) NOT NULL, "
+            "semgrep_rule_id VARCHAR(255) NOT NULL, "
+            "file_path VARCHAR(500) NOT NULL, evidence_sha256 VARCHAR(64) NOT NULL, "
+            "source_finding_id INTEGER, created_by INTEGER NOT NULL, "
+            "is_active BOOLEAN NOT NULL DEFAULT 1, "
+            "created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, "
+            "updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, "
+            "CONSTRAINT suppression_language CHECK ("
+            "language IN ('JAVA', 'JAVASCRIPT', 'PYTHON')), "
+            "CONSTRAINT uq_finding_suppression_fingerprint UNIQUE ("
+            "project_id, language, semgrep_rule_id, file_path, evidence_sha256), "
+            "FOREIGN KEY(project_id) REFERENCES projects(id) ON DELETE CASCADE, "
+            "FOREIGN KEY(source_finding_id) REFERENCES findings(id) ON DELETE SET NULL, "
+            "FOREIGN KEY(created_by) REFERENCES users(id) ON DELETE RESTRICT"
+            ")"
+        )
+    )
+    for column_name in ("project_id", "source_finding_id", "created_by"):
+        connection.execute(
+            text(
+                f"CREATE INDEX IF NOT EXISTS ix_finding_suppressions_{column_name} "
+                f"ON finding_suppressions ({column_name})"
+            )
+        )
+
+
+def _add_finding_suppression_hits(connection: Connection) -> None:
+    """Add immutable per-analysis records for automatically excluded results."""
+    connection.execute(
+        text(
+            "CREATE TABLE IF NOT EXISTS finding_suppression_hits ("
+            "id INTEGER NOT NULL PRIMARY KEY, "
+            "analysis_run_id INTEGER NOT NULL, suppression_id INTEGER, "
+            "source_finding_id INTEGER, reviewed_by INTEGER NOT NULL, "
+            "kisa_id VARCHAR(100) NOT NULL, rule_name VARCHAR(200) NOT NULL, "
+            "language VARCHAR(20) NOT NULL, semgrep_rule_id VARCHAR(255) NOT NULL, "
+            "file_path VARCHAR(500) NOT NULL, start_line INTEGER NOT NULL, "
+            "start_column INTEGER, end_line INTEGER, end_column INTEGER, "
+            "message TEXT NOT NULL, review_note TEXT, reviewed_at DATETIME, "
+            "created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, "
+            "CONSTRAINT suppression_hit_language CHECK ("
+            "language IN ('JAVA', 'JAVASCRIPT', 'PYTHON')), "
+            "FOREIGN KEY(analysis_run_id) REFERENCES analysis_runs(id) ON DELETE CASCADE, "
+            "FOREIGN KEY(suppression_id) REFERENCES finding_suppressions(id) ON DELETE SET NULL, "
+            "FOREIGN KEY(source_finding_id) REFERENCES findings(id) ON DELETE SET NULL, "
+            "FOREIGN KEY(reviewed_by) REFERENCES users(id) ON DELETE RESTRICT"
+            ")"
+        )
+    )
+    for column_name in (
+        "analysis_run_id",
+        "suppression_id",
+        "source_finding_id",
+        "reviewed_by",
+    ):
+        connection.execute(
+            text(
+                f"CREATE INDEX IF NOT EXISTS ix_finding_suppression_hits_{column_name} "
+                f"ON finding_suppression_hits ({column_name})"
+            )
+        )
+
+
 SCHEMA_MIGRATIONS: tuple[SchemaMigration, ...] = (
     SchemaMigration(1, "Initial SAST domain schema baseline", _record_initial_schema),
     SchemaMigration(
@@ -518,6 +642,21 @@ SCHEMA_MIGRATIONS: tuple[SchemaMigration, ...] = (
         15,
         "Add public GitHub source identity to projects",
         _add_public_github_source_metadata,
+    ),
+    SchemaMigration(
+        16,
+        "Add project expiration and false-positive suppressions",
+        _add_project_expiration_and_finding_suppressions,
+    ),
+    SchemaMigration(
+        17,
+        "Add per-analysis false-positive suppression history",
+        _add_finding_suppression_hits,
+    ),
+    SchemaMigration(
+        18,
+        "Enable the approved second KISA diagnostic-rule expansion",
+        _sync_phase23_builtin_rule_metadata,
     ),
 )
 

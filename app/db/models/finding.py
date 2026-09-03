@@ -15,6 +15,7 @@ from app.db.models.types import persisted_enum
 if TYPE_CHECKING:
     from app.db.models.analysis_run import AnalysisRun
     from app.db.models.finding_revalidation import FindingRevalidation
+    from app.db.models.finding_suppression_hit import FindingSuppressionHit
     from app.db.models.finding_workflow import FindingWorkflow
     from app.db.models.rule import Rule
 
@@ -82,4 +83,7 @@ class Finding(Base):
         back_populates="matched_finding",
         foreign_keys="FindingRevalidation.matched_finding_id",
         passive_deletes=True,
+    )
+    suppression_hits: Mapped[list[FindingSuppressionHit]] = relationship(
+        back_populates="source_finding", passive_deletes=True
     )

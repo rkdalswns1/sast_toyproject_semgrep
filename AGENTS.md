@@ -40,7 +40,7 @@
 11. KISA 카탈로그는 `docs/kisa-catalog.md`를 따른다.
 12. KISA 49개 항목은 사용자가 제공한 공식 자료 없이 추측하여 작성하지 않는다.
 13. Python 패키지 버전은 루트 `requirements.txt`에 고정한다.
-14. 프로젝트 생성·계정·규칙 관리는 SUPER_ADMIN만 수행한다. ZIP 소스 업로드, 공개 GitHub 소스 수집, 할당된 프로젝트 변경·사용자 배정·분석 실행 및 분석 오류 원문 조회는 SUPER_ADMIN 또는 해당 프로젝트에 할당된 PROJECT_MANAGER만 수행한다.
+14. 프로젝트 생성·만료일·삭제·계정·규칙 관리는 SUPER_ADMIN만 수행한다. ZIP 소스 업로드, 공개 GitHub 소스 수집, 할당된 프로젝트 변경·사용자 배정·분석 실행 및 분석 오류 원문 조회는 SUPER_ADMIN 또는 해당 프로젝트에 할당된 PROJECT_MANAGER만 수행한다.
 15. 일반 USER는 할당된 프로젝트의 분석 이력과 Finding만 읽기 전용으로 조회한다. 신규 계정은 최초 로그인 후 개인 비밀번호를 변경하기 전까지 다른 보호 기능을 사용할 수 없다.
 16. `create_all()` 이후 `app/db/migrations.py`의 버전 마이그레이션을 적용하고 성공한 버전을 `schema_versions`에 기록한다.
 17. 보안 통제와 외부 구성요소 관리 절차는 `docs/security.md`를 따른다.

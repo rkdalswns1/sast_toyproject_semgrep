@@ -85,7 +85,11 @@ Phase 18 시험은 안전한 ZIP을 저장한 뒤 원본 파일명, 업로드 �
 
 Phase 19 시험은 활성 29개 Rule ID의 주요 CWE·확신 수준·조치 권고, CWE 형식 검증, 분석 시 Finding 스냅샷과 이후 규칙 변경 독립성을 확인한다. Finding 상세와 CSV/PDF의 CWE·권고를 확인하고 원본 JSON·절대경로 제외 정책을 회귀 검증한다. 프로젝트 삭제는 SUPER_ADMIN 버튼·확인 속성·CSRF, PROJECT_MANAGER·USER 403, DB 하위 데이터 연쇄 삭제와 계산된 프로젝트 소스 디렉터리 제거를 확인한다.
 
+Phase 23 시험은 독립 YAML 15개와 언어별 Rule ID 38개의 구조를 확인한다. 고정 취약 샘플은 Java 15건, JavaScript 11건, Python 12건을 정확한 KISA ID·위치·심각도·신뢰도로 탐지하고, 대응 정상 샘플은 0건이어야 한다. 특히 RSA 1,024/2,048비트, 배열 직접 참조/방어적 복사, Servlet 내부/외부 `System.exit` 경계를 검증한다. 분석 상세에서는 반복 Finding 건수와 중복을 제외한 고유 KISA 항목 수를 구분해 표시한다.
+
 Phase 20 시험은 공개 GitHub URL과 ref의 allowlist, 기본 branch·명시 ref의 commit SHA 확정, HTTPS redirect 허용 호스트, timeout·다운로드 크기, 수신 ZIP 재검증을 고정 응답으로 검증한다. SUPER_ADMIN과 담당 PROJECT_MANAGER만 수집할 수 있고 USER는 403, 미할당 사용자는 404인지 확인한다. 실패한 수집은 기존 Project 소스·메타데이터를 바꾸지 않고, 성공한 수집 정보가 새 AnalysisRun provenance에 복사되는지 확인한다.
+
+Phase 21 시험은 만료일 생성·수정 권한, 만료일 도달 전 접근, 도달 후 목록·직접 URL 404와 자동 DB·소스 삭제를 검증한다. 오탐 suppression은 동일 코드의 줄 이동 제외, Rule ID·언어·경로·코드 변경 시 재탐지, 다른 프로젝트 비적용, 오탐 상태 해제 후 재탐지와 분석 요약 제외 건수를 검증한다.
 
 SFR-012 등록 시험은 SUPER_ADMIN의 KISA 항목·언어별 Semgrep Rule ID 등록과 수정, DB 지속성, PROJECT_MANAGER·USER 접근 차단 및 중복 Rule ID 거부를 검증한다. YAML의 문법과 탐지 동작은 실제 Semgrep 진단 예제 시험이 담당한다.
 
@@ -130,3 +134,5 @@ RFP TST 핵심 시험:
 16. 새 분석 Finding 상세와 CSV/PDF에서 CWE 번호·MITRE 링크·매핑 확신 수준·조치 권고를 확인하고, 규칙 관리에서 값을 수정해도 기존 Finding이 바뀌지 않는지 확인한다.
 17. SUPER_ADMIN으로 시험 프로젝트 상세의 빨간 삭제 버튼을 누르고 확인 창에서 취소·확인을 각각 시험한다. 삭제 후 프로젝트와 분석 이력·Finding·저장 소스가 제거되고 다른 역할에는 버튼이 없으며 직접 POST는 403인지 확인한다.
 18. 공개 GitHub 저장소 URL을 기본 branch와 명시 branch로 각각 가져와 프로젝트 상세의 URL·ref·commit을 확인한다. 해당 소스로 분석한 뒤 분석 상세에도 같은 실행 시점 정보가 보존되는지 확인하고 USER 화면에는 가져오기 폼이 없는지 확인한다.
+19. SUPER_ADMIN으로 시험 프로젝트에 오늘 만료일을 지정해 목록·직접 URL에서 사라지고 정리 후 DB와 저장 소스가 삭제되는지 확인한다. 새 프로젝트 Finding을 오탐 처리하고 동일 코드를 다시 분석해 자동 제외 건수와 0개 저장을 확인한 뒤, 코드를 변경하거나 오탐 상태를 해제해 다시 Finding이 생성되는지 확인한다.
+20. 오탐 처리한 코드를 다시 분석해 분석 상세의 자동 제외 건수 링크와 별도 내역에서 KISA·규칙·상대 위치·최초 판정자·시각·의견을 확인한다. 오탐 상태를 해제해도 과거 내역이 유지되는지, 미할당 사용자는 404인지, CSV/PDF에는 수동 오탐과 자동 제외 내역이 모두 빠지는지 확인한다.

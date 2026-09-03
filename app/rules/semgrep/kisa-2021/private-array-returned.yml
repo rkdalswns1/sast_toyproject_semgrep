@@ -1,0 +1,27 @@
+rules:
+  - id: kisa-2021-private-array-returned-java
+    languages: [java]
+    severity: INFO
+    message: A public method returns the original reference to a private array.
+    metadata:
+      kisa_standard_id: 제6절-3
+      confidence: HIGH
+      recommendation: Return a defensive copy using clone or Arrays.copyOf.
+    patterns:
+      - pattern-inside: |
+          class $CLASS {
+            ...
+            private $TYPE[] $FIELD;
+            ...
+          }
+      - pattern-either:
+          - pattern: |
+              public $TYPE[] $METHOD(...) {
+                ...
+                return $FIELD;
+              }
+          - pattern: |
+              public $TYPE[] $METHOD(...) {
+                ...
+                return this.$FIELD;
+              }

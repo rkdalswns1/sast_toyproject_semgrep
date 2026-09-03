@@ -129,6 +129,12 @@ def test_vulnerable_and_safe_samples_match_expected_findings(
         assert vulnerable_run.summary["stored_finding_count"] == len(
             expected["findings"]
         )
+        assert vulnerable_run.summary["stored_distinct_kisa_count"] == len(
+            expected["findings"]
+        )
+        assert vulnerable_run.summary["stored_distinct_kisa_count_by_language"] == {
+            language.value: len(expected["findings"])
+        }
 
         for standard_id, expected_finding in expected["findings"].items():
             finding = findings_by_standard[standard_id]
@@ -235,17 +241,23 @@ def test_multi_language_project_scans_all_detected_languages_in_one_run(
             "JAVASCRIPT",
             "PYTHON",
         ]
-        assert len(vulnerable_run.summary["provenance"]["active_rules"]) == 29
+        assert len(vulnerable_run.summary["provenance"]["active_rules"]) == 38
         assert vulnerable_run.summary["stored_finding_count_by_language"] == {
-            "JAVA": 10,
-            "JAVASCRIPT": 9,
-            "PYTHON": 10,
+            "JAVA": 15,
+            "JAVASCRIPT": 11,
+            "PYTHON": 12,
         }
+        assert vulnerable_run.summary["stored_distinct_kisa_count_by_language"] == {
+            "JAVA": 15,
+            "JAVASCRIPT": 11,
+            "PYTHON": 12,
+        }
+        assert vulnerable_run.summary["stored_distinct_kisa_count"] == 15
 
         findings = session.scalars(
             select(Finding).where(Finding.analysis_run_id == vulnerable_run_id)
         ).all()
-        assert len(findings) == 29
+        assert len(findings) == 38
         for language in Language:
             language_findings = {
                 finding.kisa_id

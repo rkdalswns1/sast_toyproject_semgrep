@@ -1,0 +1,57 @@
+rules:
+  - id: kisa-2021-code-injection-python
+    languages: [python]
+    severity: ERROR
+    message: Untrusted request data is executed as Python code.
+    metadata:
+      kisa_standard_id: 제1절-2
+      confidence: HIGH
+      recommendation: Do not execute external input; map approved values to fixed operations.
+    mode: taint
+    pattern-sources:
+      - pattern-either:
+          - pattern: request.args.get(...)
+          - pattern: request.form.get(...)
+          - pattern: request.get_json(...)
+          - pattern: flask.request.args.get(...)
+          - pattern: flask.request.form.get(...)
+          - pattern: flask.request.get_json(...)
+    pattern-sinks:
+      - pattern-either:
+          - pattern: eval(...)
+          - pattern: exec(...)
+          - pattern: compile(...)
+
+  - id: kisa-2021-code-injection-java
+    languages: [java]
+    severity: ERROR
+    message: Untrusted HTTP request data is evaluated as code.
+    metadata:
+      kisa_standard_id: 제1절-2
+      confidence: HIGH
+      recommendation: Do not evaluate external input; map approved values to fixed operations.
+    mode: taint
+    pattern-sources:
+      - pattern: $REQUEST.getParameter(...)
+    pattern-sinks:
+      - pattern: $ENGINE.eval(...)
+
+  - id: kisa-2021-code-injection-javascript
+    languages: [javascript]
+    severity: ERROR
+    message: Untrusted HTTP request data is evaluated as JavaScript code.
+    metadata:
+      kisa_standard_id: 제1절-2
+      confidence: HIGH
+      recommendation: Do not evaluate external input; map approved values to fixed operations.
+    mode: taint
+    pattern-sources:
+      - pattern-either:
+          - pattern: $REQ.query.$KEY
+          - pattern: $REQ.body.$KEY
+          - pattern: $REQ.params.$KEY
+    pattern-sinks:
+      - pattern-either:
+          - pattern: eval(...)
+          - pattern: Function(...)
+          - pattern: new Function(...)

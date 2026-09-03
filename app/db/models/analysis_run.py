@@ -15,6 +15,7 @@ from app.db.models.types import persisted_enum
 if TYPE_CHECKING:
     from app.db.models.finding import Finding
     from app.db.models.finding_revalidation import FindingRevalidation
+    from app.db.models.finding_suppression_hit import FindingSuppressionHit
     from app.db.models.project import Project
     from app.db.models.user import User
 
@@ -53,6 +54,11 @@ class AnalysisRun(Base):
         passive_deletes=True,
     )
     finding_revalidations: Mapped[list[FindingRevalidation]] = relationship(
+        back_populates="analysis_run",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
+    suppression_hits: Mapped[list[FindingSuppressionHit]] = relationship(
         back_populates="analysis_run",
         cascade="all, delete-orphan",
         passive_deletes=True,

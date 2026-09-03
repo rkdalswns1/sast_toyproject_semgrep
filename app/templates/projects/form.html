@@ -10,6 +10,7 @@
     <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
     <label>프로젝트명<input name="name" value="{{ submitted.name if submitted else project.name if project else '' }}" required></label>
     <label>설명<textarea name="description" rows="4">{{ submitted.description if submitted else project.description if project and project.description else '' }}</textarea></label>
+    {% if is_super_admin %}<label>프로젝트 만료일 (선택)<input type="date" name="expires_on" min="{{ minimum_expiration }}" value="{{ submitted.expires_on if submitted else project.expires_on.isoformat() if project and project.expires_on else '' }}"></label><p class="muted">내일 이후 날짜를 선택할 수 있습니다. 해당 날짜가 되면 프로젝트, 분석 결과와 저장 소스가 자동 삭제됩니다.</p>{% endif %}
     {% set selected_language = submitted.language if submitted else project.language.value if project else '' %}
     <label>언어<select name="language" required><option value="" disabled {% if not selected_language %}selected{% endif %}>언어 선택</option>{% for profile in language_profiles %}<option value="{{ profile.language.value }}" {% if selected_language == profile.language.value %}selected{% endif %}>{{ profile.label }}</option>{% endfor %}</select></label>
     {% set multi_scan = submitted.scan_all_languages if submitted else project.scan_all_languages if project else true %}

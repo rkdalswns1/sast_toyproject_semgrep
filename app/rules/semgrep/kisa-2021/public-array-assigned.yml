@@ -1,0 +1,29 @@
+rules:
+  - id: kisa-2021-public-array-assigned-java
+    languages: [java]
+    severity: INFO
+    message: A public method stores an external array reference in a private field.
+    metadata:
+      kisa_standard_id: 제6절-4
+      confidence: HIGH
+      recommendation: Store a defensive copy using clone or Arrays.copyOf.
+    patterns:
+      - pattern-inside: |
+          class $CLASS {
+            ...
+            private $TYPE[] $FIELD;
+            ...
+          }
+      - pattern-either:
+          - pattern: |
+              public void $METHOD(..., $TYPE[] $PARAM, ...) {
+                ...
+                $FIELD = $PARAM;
+                ...
+              }
+          - pattern: |
+              public void $METHOD(..., $TYPE[] $PARAM, ...) {
+                ...
+                this.$FIELD = $PARAM;
+                ...
+              }

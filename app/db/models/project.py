@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+from datetime import date
 from typing import TYPE_CHECKING, Any
 
-from sqlalchemy import JSON, Boolean, ForeignKey, String, Text, false
+from sqlalchemy import JSON, Boolean, Date, ForeignKey, String, Text, false
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
@@ -14,6 +15,7 @@ from app.db.models.types import persisted_enum
 
 if TYPE_CHECKING:
     from app.db.models.analysis_run import AnalysisRun
+    from app.db.models.finding_suppression import FindingSuppression
     from app.db.models.user import User
 
 
@@ -23,6 +25,7 @@ class Project(TimestampMixin, Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     name: Mapped[str] = mapped_column(String(200), nullable=False)
     description: Mapped[str | None] = mapped_column(Text)
+    expires_on: Mapped[date | None] = mapped_column(Date)
     source_type: Mapped[SourceType] = mapped_column(
         persisted_enum(SourceType, "source_type"), nullable=False
     )
@@ -62,6 +65,11 @@ class Project(TimestampMixin, Base):
         secondary="project_users", back_populates="projects", viewonly=True
     )
     analysis_runs: Mapped[list[AnalysisRun]] = relationship(
+        back_populates="project",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
+    suppressions: Mapped[list[FindingSuppression]] = relationship(
         back_populates="project",
         cascade="all, delete-orphan",
         passive_deletes=True,

@@ -83,3 +83,15 @@
 - `tests/samples/` 및 기대 Finding 변경
 
 1차 네 후보 전체를 자동 승인된 것으로 간주하지 않는다. 이번 구현은 `Approved First Scope`의 항목과 언어만 대상으로 한다.
+
+## Phase 23 Follow-up Decision
+
+2026-09-02 재조사와 사용자 승인에 따라 Phase 11 당시 보류·제외했던 항목 중 아래 다섯 항목을 두 번째 확대 범위로 확정했다. 범위는 단일 함수 또는 직접 참조 패턴으로 제한하고 모두 `PARTIAL`로 관리한다.
+
+| KISA ID | 항목명 | 승인 언어 | 제한된 탐지 범위 |
+|---|---|---|---|
+| 제1절-2 | 코드삽입 | Java, JavaScript, Python | 요청 입력에서 `eval` 계열 실행까지의 taint |
+| 제2절-7 | 충분하지 않은 키 길이 사용 | Java, JavaScript, Python | 리터럴 RSA 키 길이 2,048비트 미만 |
+| 제6절-3 | Public 메소드부터 반환된 Private 배열 | Java | private 배열 원본 직접 반환 |
+| 제6절-4 | Private 배열에 Public 데이터 할당 | Java | 외부 배열 참조의 private 필드 직접 대입 |
+| 제7절-2 | 취약한 API 사용 | Java | Servlet 내부 `System.exit` 호출 |

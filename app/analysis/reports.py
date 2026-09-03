@@ -137,9 +137,11 @@ def build_analysis_report(
     counts = {severity.value: 0 for severity in SEVERITY_ORDER}
     report_findings: list[ReportFinding] = []
     for finding in findings:
-        counts[finding.severity.value] += 1
         workflow = finding.workflow
         workflow_status = workflow.status if workflow else FindingStatus.OPEN
+        if workflow_status is FindingStatus.FALSE_POSITIVE:
+            continue
+        counts[finding.severity.value] += 1
         report_findings.append(
             ReportFinding(
                 finding_id=finding.id,

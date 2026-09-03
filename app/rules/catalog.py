@@ -74,7 +74,7 @@ def _entry(
 # a separate KISA code. Those source identifiers are retained verbatim here.
 KISA_2021_CATALOG: tuple[CatalogEntry, ...] = (
     _entry(1, 1, _INPUT_VALIDATION, "SQL 삽입", Severity.HIGH, _INITIAL_RULE_LANGUAGES, ImplementationStatus.PARTIAL, "kisa-2021-sql-injection-python"),
-    _entry(1, 2, _INPUT_VALIDATION, "코드삽입"),
+    _entry(1, 2, _INPUT_VALIDATION, "코드삽입", Severity.HIGH, _INITIAL_RULE_LANGUAGES, ImplementationStatus.PARTIAL, "kisa-2021-code-injection-python"),
     _entry(1, 3, _INPUT_VALIDATION, "경로 조작 및 자원 삽입", Severity.HIGH, _INITIAL_RULE_LANGUAGES, ImplementationStatus.PARTIAL, "kisa-2021-path-traversal-python"),
     _entry(1, 4, _INPUT_VALIDATION, "크로스사이트 스크립트", Severity.HIGH, _INITIAL_RULE_LANGUAGES, ImplementationStatus.PARTIAL, "kisa-2021-xss-python"),
     _entry(1, 5, _INPUT_VALIDATION, "운영체제 명령어 삽입", Severity.HIGH, _INITIAL_RULE_LANGUAGES, ImplementationStatus.PARTIAL, "kisa-2021-os-command-injection-python"),
@@ -96,7 +96,7 @@ KISA_2021_CATALOG: tuple[CatalogEntry, ...] = (
     _entry(2, 4, _SECURITY_FUNCTION, "취약한 암호화 알고리즘 사용", Severity.MEDIUM, _INITIAL_RULE_LANGUAGES, ImplementationStatus.PARTIAL, "kisa-2021-weak-crypto-python"),
     _entry(2, 5, _SECURITY_FUNCTION, "암호화되지 않은 중요정보"),
     _entry(2, 6, _SECURITY_FUNCTION, "하드코드된 중요정보", Severity.HIGH, _INITIAL_RULE_LANGUAGES, ImplementationStatus.PARTIAL, "kisa-2021-hardcoded-sensitive-information-python"),
-    _entry(2, 7, _SECURITY_FUNCTION, "충분하지 않은 키 길이 사용"),
+    _entry(2, 7, _SECURITY_FUNCTION, "충분하지 않은 키 길이 사용", Severity.MEDIUM, _INITIAL_RULE_LANGUAGES, ImplementationStatus.PARTIAL, "kisa-2021-insufficient-key-length-python"),
     _entry(2, 8, _SECURITY_FUNCTION, "적절하지 않은 난수 값 사용"),
     _entry(2, 9, _SECURITY_FUNCTION, "취약한 비밀번호 허용"),
     _entry(2, 10, _SECURITY_FUNCTION, "부적절한 전자서명 확인"),
@@ -118,8 +118,8 @@ KISA_2021_CATALOG: tuple[CatalogEntry, ...] = (
     _entry(5, 5, _CODE_ERROR, "신뢰할 수 없는 데이터의 역직렬화", Severity.HIGH, _JAVA_PYTHON_RULE_LANGUAGES, ImplementationStatus.PARTIAL, "kisa-2021-unsafe-deserialization-python"),
     _entry(6, 1, _ENCAPSULATION, "잘못된 세션에 의한 데이터 정보 노출"),
     _entry(6, 2, _ENCAPSULATION, "제거되지 않고 남은 디버그 코드"),
-    _entry(6, 3, _ENCAPSULATION, "Public 메소드부터 반환된 Private 배열"),
-    _entry(6, 4, _ENCAPSULATION, "Private 배열에 Public 데이터 할당"),
+    _entry(6, 3, _ENCAPSULATION, "Public 메소드부터 반환된 Private 배열", Severity.INFO, (Language.JAVA,), ImplementationStatus.PARTIAL, "kisa-2021-private-array-returned-java"),
+    _entry(6, 4, _ENCAPSULATION, "Private 배열에 Public 데이터 할당", Severity.INFO, (Language.JAVA,), ImplementationStatus.PARTIAL, "kisa-2021-public-array-assigned-java"),
     _entry(7, 1, _API_MISUSE, "DNS lookup에 의존한 보안결정"),
-    _entry(7, 2, _API_MISUSE, "취약한 API 사용"),
+    _entry(7, 2, _API_MISUSE, "취약한 API 사용", Severity.MEDIUM, (Language.JAVA,), ImplementationStatus.PARTIAL, "kisa-2021-system-exit-in-servlet-java"),
 )

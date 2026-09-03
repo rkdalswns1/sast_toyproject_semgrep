@@ -8,6 +8,8 @@
 
 ### projects
 
+기존 프로젝트 필드에 nullable DATE `expires_on`을 추가한다. 애플리케이션 로컬 날짜가 이 값에 도달하면 프로젝트는 만료되어 자동 삭제 대상이 된다.
+
 `id` PK, `name` NOT NULL, `description`, `source_type` NOT NULL, `source_origin` NOT NULL, `repository_url`, `repository_ref`, `repository_commit`, `language` NOT NULL, `scan_all_languages` NOT NULL, `source_path` NOT NULL, `source_version`, `deployment_version`, `source_description`, `source_summary` JSON, `created_by` FK users.id, `created_at`, `updated_at`. `source_type`은 분석 입력 archive 형식인 `ZIP`을 유지하고 `source_origin`은 사용자가 직접 올린 `ZIP` 또는 공개 `GITHUB` 수집을 구분한다. GitHub 컬럼은 최신 저장소 URL·요청 ref·확정 commit SHA를 저장하며 ZIP 직접 업로드 시 비워 둔다. `language`은 기준 언어이며 `scan_all_languages=true`이면 안전하게 압축 해제된 소스에서 감지된 모든 지원 언어를 함께 분석한다.
 
 ### project_users
@@ -38,6 +40,14 @@
 
 `id` PK, `source_finding_id` FK findings.id, `analysis_run_id` FK analysis_runs.id, `matched_finding_id` nullable FK findings.id, `result`, `executed_by` FK users.id, `created_at`. 원본 Finding에 대한 재검증 실행과 새 분석 결과의 비교 판단을 이력으로 저장한다. 같은 원본 Finding과 AnalysisRun 조합은 한 번만 저장한다.
 
+### finding_suppressions
+
+`id` PK, `project_id` FK projects.id, `language`, `semgrep_rule_id`, `file_path`, `evidence_sha256`, `source_finding_id` nullable FK findings.id, `created_by` FK users.id, `is_active`, `created_at`, `updated_at`. 프로젝트·언어·Rule ID·상대경로·코드 지문 조합은 UNIQUE이며 오탐 상태 해제 시 행을 삭제하지 않고 비활성화한다.
+
+### finding_suppression_hits
+
+`id` PK, `analysis_run_id` FK analysis_runs.id, `suppression_id` nullable FK finding_suppressions.id, `source_finding_id` nullable FK findings.id, `reviewed_by` nullable FK users.id, `kisa_id`, `rule_name`, `language`, `semgrep_rule_id`, `file_path`, `start_line`, `start_column`, `end_line`, `end_column`, `message`, `review_note`, `reviewed_at`, `created_at`. 후속 분석에서 실제 제외된 결과와 최초 오탐 판정 정보를 실행 시점 스냅샷으로 보존하며 코드 원문·지문·원본 엔진 결과는 저장하지 않는다.
+
 ### diagnostic_rules
 
 `id` PK, `catalog_rule_id` FK rules.id, `language`, `semgrep_rule_id` UNIQUE, `primary_cwe_id`, `related_cwe_ids` JSON, `cwe_mapping_confidence`, `remediation_guidance`, `is_active`, `created_at`, `updated_at`.
@@ -55,12 +65,14 @@ KISA 카탈로그 항목과 언어별 Semgrep Rule ID를 분리한다. 하나의
 - Project 1:N AnalysisRun
 - User 1:N AnalysisRun through executed_by
 - AnalysisRun 1:N Finding
+- AnalysisRun 1:N FindingSuppressionHit
 - Rule 1:N Finding
 - Rule 1:N DiagnosticRule
 - Finding 1:1 FindingWorkflow
 - User 1:N FindingWorkflow through updated_by
 - User 1:N FindingWorkflow through assignee_id
 - Finding 1:N FindingRevalidation through source_finding_id
+- Finding 1:N FindingSuppressionHit through source_finding_id
 - AnalysisRun 1:N FindingRevalidation
 - User 1:N FindingRevalidation through executed_by
 
@@ -88,6 +100,7 @@ DiagnosticRule은 카탈로그의 공식 ID·명칭을 복제하지 않는다. �
 - 마이그레이션 실패 시 해당 버전을 기록하지 않는다.
 - 버전 4는 기존 DB에서 새로 구현된 경로 조작, XSS, 위험한 파일 업로드, XXE 카탈로그 행의 구현 상태·지원 언어·대표 Semgrep Rule ID를 동기화한다. 관리자가 변경한 카탈로그 활성 상태는 보존한다.
 - 버전 5는 기존 Finding의 `raw_result.path`를 이미 정규화된 `file_path`와 동일한 소스 상대경로로 변경한다. 나머지 Semgrep 원본 필드는 유지한다.
+- 버전 17은 분석 실행별 오탐 자동 제외 이력 테이블을 추가하며 기존 suppression과 Finding은 변경하지 않는다.
 - 버전 6은 `users.role` 제약을 `SUPER_ADMIN`, `PROJECT_MANAGER`, `USER`로 교체하고 기존 `ADMIN`을 `SUPER_ADMIN`으로 변환하며 `must_change_password` 컬럼을 추가한다. 기존 사용자 관계와 식별자·해시·활성 상태·시각은 보존한다.
 - 버전 7은 기존 DB의 인증서 유효성 검증과 신뢰할 수 없는 데이터의 역직렬화 카탈로그 행을 `PARTIAL`로 전환하고 지원 언어·대표 Semgrep Rule ID·기본 심각도를 동기화한다. 관리자가 변경한 활성 상태는 보존한다.
 - 버전 8은 `projects.scan_all_languages`를 추가한다. 기존 프로젝트는 기존 동작을 보존하기 위해 `false`로 이전하며 신규 프로젝트는 화면에서 통합 분석을 선택할 수 있다.
@@ -98,6 +111,8 @@ DiagnosticRule은 카탈로그의 공식 ID·명칭을 복제하지 않는다. �
 - 버전 13은 `projects`에 nullable JSON `source_summary`를 추가한다. 기존 프로젝트는 요약이 없는 상태로 유지하며 다음 ZIP 업로드 성공 시 생성한다.
 - 버전 14는 `diagnostic_rules`와 `findings`에 CWE 필드를 추가하고 DiagnosticRule에 조치 권고를 추가한다. 승인된 29개 Rule ID를 seed하고 기존 Finding은 원본 결과의 Rule ID가 정확히 일치할 때만 CWE 스냅샷을 채운다.
 - 버전 15는 `projects`에 `source_origin`, `repository_url`, `repository_ref`, `repository_commit`을 추가한다. 기존 프로젝트는 `source_origin=ZIP`이고 GitHub 식별 정보는 없는 상태로 유지한다.
+- 버전 16은 `projects.expires_on`과 `finding_suppressions`를 추가한다. 기존 프로젝트는 만료일이 없고 기존 오탐 Finding은 자동 suppression으로 역변환하지 않아 관리자가 이후 상태를 다시 저장할 때부터 적용한다.
+- 버전 18은 두 번째 KISA 규칙 확대의 다섯 카탈로그 행을 `PARTIAL`로 전환하고 승인 언어·대표 Rule ID·심각도를 동기화한다. 기존 카탈로그 활성 상태와 Finding은 변경하지 않는다.
 
 ## Deletion Policy
 
@@ -111,3 +126,4 @@ DiagnosticRule은 카탈로그의 공식 ID·명칭을 복제하지 않는다. �
 - Finding 삭제 시 FindingWorkflow를 함께 삭제하고, 상태 변경자 또는 담당자로 참조 중인 User 삭제는 제한한다.
 - 원본 Finding 또는 새 AnalysisRun 삭제 시 연결된 FindingRevalidation을 함께 삭제하고, 일치 Finding 삭제 시 `matched_finding_id`만 NULL로 변경한다. 실행자를 참조 중인 User 삭제는 제한한다.
 - `projects.created_by`와 `analysis_runs.executed_by`의 기록 보존을 위해 참조 중인 User의 물리 삭제를 제한한다.
+- Project 삭제 시 연결된 FindingSuppression을 함께 삭제하고, 원본 Finding만 삭제되면 `source_finding_id`를 NULL로 변경한다.

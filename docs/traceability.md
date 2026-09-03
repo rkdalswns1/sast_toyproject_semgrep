@@ -21,6 +21,9 @@ isolated upload directory; no test uses the developer's local project data.
 | Phase 18 source confirmation | Implemented | Safe-extraction source summary on project detail and persistence tests |
 | Phase 19 CWE guidance | Implemented | Rule-ID-level CWE mapping, Finding snapshots, detail/report output and SUPER_ADMIN project deletion |
 | Phase 20 public GitHub source | Implemented | Strict public GitHub URL/ref validation, immutable commit archive intake and shared ZIP security pipeline |
+| Phase 21 project lifecycle | Implemented | SUPER_ADMIN expiry management, expired-project access blocking and periodic safe deletion |
+| Phase 21 false-positive suppression | Implemented | Project-scoped exact-code fingerprint suppression with reversible workflow-state control |
+| Phase 22 suppression audit history | Implemented | Per-analysis excluded-result snapshots, protected read-only history and report separation |
 
 ## Data Requirement Status
 
@@ -43,6 +46,9 @@ isolated upload directory; no test uses the developer's local project data.
 | DAR-015 | Implemented | Project JSON stores a bounded summary derived from the latest safely extracted source |
 | DAR-016 | Implemented | DiagnosticRule CWE/guidance data and immutable Finding snapshots with schema migration 14 |
 | DAR-017 | Implemented | Project source origin/repository/ref/commit fields and AnalysisRun provenance snapshot with schema migration 15 |
+| DAR-018 | Implemented | Nullable project expiry date and existing cascade deletion policy with schema migration 16 |
+| DAR-019 | Implemented | Active suppression stores project, language-specific Rule ID, relative path and evidence SHA-256 without source content |
+| DAR-020 | Implemented | FindingSuppressionHit snapshots each run's excluded rule/location and original reviewer decision with schema migration 17 |
 
 ## Security Requirement Status
 
@@ -65,6 +71,9 @@ isolated upload directory; no test uses the developer's local project data.
 | SEC-015 | Implemented | Source summary is generated after safe extraction and excludes content and absolute paths |
 | SEC-016 | Implemented | CSRF-protected SUPER_ADMIN project deletion uses a computed upload-root boundary |
 | SEC-017 | Implemented | Public HTTPS github.com allowlist, safe redirect hosts, timeout/size limits and existing ZIP validation reuse |
+| SEC-018 | Implemented | SUPER_ADMIN-only expiry changes and cleanup paths recomputed from upload root plus project ID |
+| SEC-019 | Implemented | Exact project-scoped fingerprints prevent cross-project or changed-code suppression and store no absolute path/source content |
+| SEC-020 | Implemented | Suppression history reuses project access checks, exposes no code/fingerprint/raw JSON, and remains outside customer reports |
 
 ## Test Requirement Status
 
@@ -82,6 +91,9 @@ isolated upload directory; no test uses the developer's local project data.
 | TST-010 | Implemented | Source summary persistence, bounded relative paths, language detection, UI and failed-replacement preservation tests |
 | TST-011 | Implemented | Exact CWE mappings, snapshots, reports, rule management and project deletion tests |
 | TST-012 | Implemented | GitHub URL/ref allowlist, commit resolution, redirects, size limit, role checks and persisted source identity tests |
+| TST-013 | Implemented | Expiry permissions/access/deletion and exact, scoped, reversible false-positive suppression tests |
+| TST-014 | Implemented | Per-run suppression snapshots, viewer/outsider access, historical retention and CSV/PDF false-positive exclusion tests |
+| TST-015 | Implemented | Five Phase 23 KISA items, nine language-specific Rule IDs, fixed vulnerable/safe samples and schema migration 18 tests |
 
 | Requirement group | Implementation | Automated verification |
 |---|---|---|
@@ -99,6 +111,8 @@ isolated upload directory; no test uses the developer's local project data.
 | Git-ignored upload source scanning | `app/analysis/service.py` (`--no-git-ignore`) | `tests/test_analysis_execution.py`, `tests/test_end_to_end.py` |
 | Normalized Finding persistence, filters, details, and raw result preservation | `app/findings/services.py`, finding routes/templates | `tests/test_findings.py`, `tests/test_end_to_end.py` |
 | Finding remediation workflow, assignee/due date, and analysis executor display | `app/findings/services.py`, finding/analysis routes and templates | `tests/test_findings.py`, `tests/test_end_to_end.py` |
+| Project expiry and false-positive suppression lifecycle | `app/projects/services.py`, `app/projects/access.py`, `app/findings/services.py`, `app/main.py` | `tests/test_phase21_lifecycle.py`, `tests/test_database_schema.py` |
+| Per-analysis suppression audit history and report separation | `app/db/models/finding_suppression_hit.py`, `app/findings/services.py`, `app/analysis/routes.py` | `tests/test_phase21_lifecycle.py`, `tests/test_reports.py` |
 | Finding revalidation and new-run comparison history | `app/findings/revalidation.py`, Finding routes/detail template | `tests/test_revalidation.py` |
 | ZIP source metadata and per-analysis snapshot | `app/projects/services.py`, `app/analysis/service.py`, project/analysis templates | `tests/test_source_upload.py`, `tests/test_analysis_execution.py`, `tests/test_database_schema.py` |
 | Pre-analysis latest-source summary | `app/projects/upload.py`, `app/projects/services.py`, project detail template | `tests/test_source_upload.py`, `tests/test_database_schema.py` |
@@ -123,13 +137,13 @@ isolated upload directory; no test uses the developer's local project data.
 
 - The catalog contains all 49 implementation-stage items from the supplied
   KISA 2021 guide.
-- Nine KISA items are intentionally `PARTIAL` for Python, Java, and JavaScript:
+- Eleven KISA items are intentionally `PARTIAL` for Python, Java, and JavaScript:
   SQL injection, path traversal/resource injection, cross-site scripting,
   operating system command injection, unrestricted file upload, XML external
   entity reference, hardcoded sensitive information, weak cryptographic algorithms,
-  and improper certificate validation.
-- Unsafe deserialization is additionally `PARTIAL` for Java and Python.
-- The other 39 catalog items are `NOT_IMPLEMENTED`; the application does not
+  improper certificate validation, code injection, and insufficient key length.
+- Unsafe deserialization is additionally `PARTIAL` for Java and Python. Two private-array encapsulation items and the Servlet `System.exit` subset of vulnerable API use are additionally `PARTIAL` for Java.
+- The other 34 catalog items are `NOT_IMPLEMENTED`; the application does not
   claim automatic detection for them.
 - Python, Java, and JavaScript use language-specific Semgrep rules mapped to
   catalog entries through `kisa_standard_id` metadata; unsupported language-item

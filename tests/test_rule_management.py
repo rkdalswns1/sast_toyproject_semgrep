@@ -91,7 +91,7 @@ def test_admin_registers_a_rule_id_mapping_and_restart_preserves_it(
         async with app.router.lifespan_context(app):
             with Session(app.state.db_engine) as session:
                 catalog_rule = session.scalar(
-                    select(Rule).where(Rule.standard_id == "제1절-2")
+                    select(Rule).where(Rule.standard_id == "제1절-7")
                 )
                 assert catalog_rule is not None
                 assert catalog_rule.diagnostic_rules == []
@@ -113,19 +113,19 @@ def test_admin_registers_a_rule_id_mapping_and_restart_preserves_it(
                 )
                 assert response.status_code == 303
                 registration = await client.get("/rules/new")
-                assert "제1절-2 · 코드삽입" in registration.text
+                assert "제1절-7 · 신뢰되지 않는 URL 주소로 자동접속 연결" in registration.text
                 response = await client.post(
                     "/rules",
                     data={
                         "catalog_rule_id": str(catalog_rule_id),
-                        "python_rule_id": "kisa-2021-code-injection-python",
+                        "python_rule_id": "custom-untrusted-url-python",
                         "csrf_token": _csrf(registration.text),
                     },
                 )
                 assert response.status_code == 303
                 assert response.headers["location"] == f"/rules/{catalog_rule_id}"
                 registration = await client.get("/rules/new")
-                assert "제1절-2 · 코드삽입" not in registration.text
+                assert "제1절-7 · 신뢰되지 않는 URL 주소로 자동접속 연결" not in registration.text
                 return catalog_rule_id
 
     catalog_rule_id = asyncio.run(exercise())
@@ -147,7 +147,7 @@ def test_admin_registers_a_rule_id_mapping_and_restart_preserves_it(
         ).all()
         assert len(mappings) == 1
         assert mappings[0].language is Language.PYTHON
-        assert mappings[0].semgrep_rule_id == "kisa-2021-code-injection-python"
+        assert mappings[0].semgrep_rule_id == "custom-untrusted-url-python"
 
 
 def test_admin_registration_rejects_duplicate_rule_ids(

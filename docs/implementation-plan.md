@@ -319,3 +319,79 @@ Project에는 최신 소스의 수집 방식, 저장소 URL, 요청 ref와 확�
 - 프로젝트 상세과 분석 상세에서 저장소 URL·ref·commit을 확인하고 분석 이력에는 실행 시점 값이 보존됨
 - 비공개 저장소·토큰·Git clone을 추가하지 않음
 - DB 마이그레이션, 권한·실패 보존·전체 회귀 시험 및 애플리케이션 기동 확인
+
+## Phase 21 — Project Expiration and False-positive Suppression
+
+SUPER_ADMIN은 프로젝트 생성·수정 시 선택적인 만료일을 지정한다. 만료일은 날짜만 저장하며 애플리케이션의 로컬 날짜가 `expires_on`에 도달하면 만료된 것으로 판단한다. 만료 프로젝트는 모든 역할의 조회·분석 경로에서 즉시 제외하고, 애플리케이션 시작 시와 기본 1시간 간격의 내부 정리 작업에서 기존 프로젝트 삭제 서비스로 DB 하위 데이터와 계산된 프로젝트 전용 소스 디렉터리를 함께 삭제한다. Celery, Redis와 별도 외부 스케줄러는 추가하지 않는다.
+
+생성·수정 시 새로 입력하는 만료일은 다음 날 이후만 허용한다. 오늘 또는 과거 날짜는 저장 전에 폼 오류로 안내하여 프로젝트 생성 직후 상세 화면이 `404`가 되는 흐름을 방지한다.
+
+Finding을 `FALSE_POSITIVE`로 변경하면 프로젝트, 언어별 Semgrep Rule ID, 소스 상대경로와 정규화한 근거 코드 SHA-256으로 suppression을 생성한다. 후속 분석에서 네 값이 모두 일치하는 결과는 Finding으로 저장하지 않고 AnalysisRun 요약에 제외 건수를 기록한다. 줄 번호와 메시지는 지문에 포함하지 않아 같은 코드가 이동해도 제외하되, 근거 코드가 변경되면 새 Finding으로 저장한다. 근거 코드가 없는 Finding은 과도한 제외를 막기 위해 suppression을 생성하지 않는다. 원본 Finding의 상태를 오탐 이외로 변경하면 해당 Finding이 만든 suppression을 비활성화한다.
+
+완료조건:
+
+- SUPER_ADMIN만 프로젝트 만료일을 생성·수정하고 PROJECT_MANAGER와 USER는 읽기 전용으로 조회함
+- 만료일 도달 시 프로젝트 목록·직접 URL에서 보이지 않고 정기 정리가 DB 하위 데이터와 프로젝트 전용 소스를 삭제함
+- 정리 실패한 프로젝트는 다음 실행에서 재시도하고 다른 프로젝트 정리를 방해하지 않음
+- 오탐 상태 변경 시 근거 코드가 있는 Finding만 프로젝트 범위의 활성 suppression을 생성함
+- 동일 Rule ID·언어·상대경로·근거 코드의 후속 결과만 제외하고 코드가 바뀌면 새 Finding으로 저장함
+- 오탐 상태 해제 시 해당 suppression이 비활성화되어 이후 분석에서 다시 저장됨
+- 엔진 탐지 건수, 저장 Finding 수와 오탐 자동 제외 수를 AnalysisRun 요약에서 구분함
+- 기존 프로젝트·Finding·워크플로를 손실 없이 스키마 버전 16으로 마이그레이션함
+- 역할·CSRF·FK·프로젝트 삭제와 전체 회귀 시험 및 애플리케이션 기동 확인
+
+## Phase 22 — Per-analysis False-positive Suppression History
+
+후속 분석에서 오탐 suppression과 일치해 Finding 저장에서 제외된 각 결과를 분석 실행별 감사 이력으로 남긴다. 일반 Finding 목록은 조치 대상만 유지하고, 분석 상세의 `오탐 자동 제외` 건수에서 별도 읽기 전용 내역 화면으로 이동한다.
+
+이력은 분석 실행, suppression, KISA ID·규칙명·언어·Semgrep Rule ID, 상대 파일 경로·발견 위치·메시지와 최초 오탐 Finding·판정 계정·판정 시각·검토 의견의 실행 시점 스냅샷을 저장한다. 근거 코드, 코드 지문, 원본 Semgrep JSON과 시스템 절대경로는 화면과 이력에 저장하지 않는다. 이후 suppression을 비활성화하거나 원본 Finding의 상태를 변경해도 과거 실행의 제외 이력은 유지한다.
+
+프로젝트에 접근 가능한 SUPER_ADMIN, 담당 PROJECT_MANAGER와 할당 USER가 내역을 읽기 전용으로 조회하며 미할당 프로젝트는 `404`로 처리한다. CSV와 PDF 보고서는 오탐 상태 Finding과 자동 제외 이력을 모두 제외하고 실제 조치 대상 Finding만 집계·출력한다.
+
+완료조건:
+
+- suppression 일치 결과마다 분석 실행별 불변 제외 이력이 저장됨
+- 분석 상세의 제외 건수와 이력 행 수가 일치하고 별도 읽기 전용 화면에서 조회 가능함
+- 원본 오탐 Finding, 판정 계정·시각·의견과 이번 실행의 KISA·규칙·상대 위치를 확인할 수 있음
+- suppression 비활성화 이후에도 기존 실행의 제외 이력은 유지됨
+- 모든 프로젝트 접근 역할은 조회하고 미할당 사용자는 `404`를 받음
+- Finding 목록에는 자동 제외 결과가 나타나지 않으며 CSV/PDF는 수동 오탐 Finding과 자동 제외 이력을 포함하거나 집계하지 않음
+- 기존 DB를 손실 없이 스키마 버전 17로 마이그레이션함
+- FK·프로젝트 삭제·권한·보고서 제외 및 전체 회귀 시험과 애플리케이션 기동 확인
+
+## Phase 23 — Second KISA Diagnostic Rule Expansion
+
+재조사에서 오탐 위험이 낮고 정상·취약 고정 샘플로 결정적으로 검증할 수 있다고 승인한 다섯 KISA 항목을 로컬 Semgrep 규칙으로 확대한다.
+
+- `제1절-2 코드삽입`: Java·JavaScript·Python의 단일 함수 요청 입력에서 `eval` 계열 실행까지의 taint 흐름
+- `제2절-7 충분하지 않은 키 길이 사용`: Java·JavaScript·Python에서 리터럴 RSA 키 길이가 2,048비트 미만인 생성 호출
+- `제6절-3 Public 메소드부터 반환된 Private 배열`: Java public 메소드가 private 배열 원본을 직접 반환하는 경우
+- `제6절-4 Private 배열에 Public 데이터 할당`: Java public 메소드가 외부 배열 참조를 private 필드에 직접 저장하는 경우
+- `제7절-2 취약한 API 사용`: Java Servlet 내부의 `System.exit` 호출
+
+각 항목은 현재 구조대로 독립 YAML 하나와 언어별 고유 Rule ID를 사용한다. 공개 규칙은 설계 참고만 하고 실행 시 원격 Registry를 사용하지 않는다. 새 Rule ID에는 패턴에 직접 대응하는 CWE와 조치 권고를 연결하고 Finding에 기존 방식으로 스냅샷한다. 대표 패턴만 지원하므로 카탈로그 상태는 `PARTIAL`로 유지한다.
+
+완료조건:
+
+- 다섯 KISA 항목이 승인 언어와 `PARTIAL` 상태로 카탈로그 및 기존 DB에 반영됨
+- 다섯 독립 YAML과 고유한 언어별 Rule ID 9개가 추가되어 전체 활성 Rule ID가 38개가 됨
+- 코드삽입은 요청 입력이 실행 함수로 흐르는 경우만 탐지하고 상수 또는 허용 동작 매핑은 탐지하지 않음
+- 키 길이는 리터럴 RSA 2,048비트 미만만 탐지하고 2,048비트 이상은 탐지하지 않음
+- 두 배열 항목은 원본 참조의 직접 반환·대입만 탐지하고 `clone`·`Arrays.copyOf` 방어적 복사는 탐지하지 않음
+- 취약한 API는 Java Servlet 내부 `System.exit`로 제한함
+- Java 15건, JavaScript 11건, Python 12건의 취약 고정 샘플과 언어별 정상 샘플 0건을 실제 Semgrep으로 검증함
+- CWE·조치 권고 seed, 스키마 버전 18, 전체 회귀 시험과 애플리케이션 기동 확인
+
+## Phase 24 — Finding and KISA Item Count Clarity
+
+분석 상세 화면에서 동일 KISA 항목이 여러 파일이나 위치에서 반복 탐지된 경우를 정확히 설명할 수 있도록 전체 Finding 건수와 중복을 제외한 고유 KISA 항목 수를 함께 표시한다. 통합 분석에서는 언어별 Finding 건수와 언어별 고유 KISA 항목 수도 함께 제공한다.
+
+기존 `AnalysisRun.summary` JSON에 집계값을 추가하므로 별도 DB 마이그레이션은 사용하지 않는다. 과거 분석 기록에 새 집계값이 없더라도 화면은 0으로 안전하게 표시하며, Finding 저장 결과를 기준으로 계산해 오탐 자동 제외 결과는 고유 KISA 집계에 포함하지 않는다.
+
+완료조건:
+
+- 분석 상세에서 저장된 Finding 건수와 고유 KISA 항목 수를 함께 표시함
+- 통합 분석에서 언어별 Finding 건수와 고유 KISA 항목 수를 함께 표시함
+- 같은 KISA ID의 반복 Finding은 Finding 건수에는 여러 건으로, 고유 항목 수에는 한 개로 집계함
+- 기존 AnalysisRun과 DB 스키마를 마이그레이션 없이 읽을 수 있음
+- 단일·통합 분석, 정상 샘플과 전체 회귀 시험을 통과함

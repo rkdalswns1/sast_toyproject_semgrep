@@ -44,6 +44,8 @@ POST /projects/{project_id}/github-source
 
 프로젝트 삭제 POST는 SUPER_ADMIN 전용이며 CSRF 토큰과 브라우저 확인 절차를 사용한다. PROJECT_MANAGER와 USER의 직접 요청은 `403`으로 처리한다.
 
+프로젝트 생성·수정 POST의 `expires_on`은 SUPER_ADMIN만 입력할 수 있다. 새로 지정하는 만료일은 입력 시점의 다음 날 이후만 허용해 저장 직후 접근 불가 상태가 되는 것을 막는다. 만료된 프로젝트는 모든 프로젝트·분석·Finding 경로에서 `404`로 처리한다.
+
 GitHub 소스 수집 POST는 공개 저장소 URL, 선택 ref와 소스 메타데이터를 받는다. SUPER_ADMIN 또는 해당 프로젝트에 할당된 PROJECT_MANAGER만 사용할 수 있으며 USER는 `403`, 미할당 사용자는 `404`로 처리한다.
 
 ## Analysis
@@ -52,6 +54,7 @@ GitHub 소스 수집 POST는 공개 저장소 URL, 선택 ref와 소스 메타�
 POST /projects/{project_id}/analysis
 GET  /projects/{project_id}/analysis
 GET  /analysis/{analysis_id}
+GET  /analysis/{analysis_id}/suppressions
 GET  /analysis/{analysis_id}/report.csv
 GET  /analysis/{analysis_id}/report.pdf
 ```
@@ -63,6 +66,8 @@ ZIP 파일이 포함된 POST는 선택 입력인 `source_version`, `deployment_v
 ZIP 저장 성공 시 안전하게 압축 해제된 실제 파일의 제한된 요약도 최신 프로젝트 정보로 함께 저장한다. 프로젝트 상세 GET은 접근 가능한 모든 역할에 이 요약을 표시하며, 별도 소스 미리보기·다운로드 경로는 제공하지 않는다.
 
 두 보고서 GET은 SUPER_ADMIN 또는 해당 프로젝트에 할당된 PROJECT_MANAGER·USER가 사용할 수 있다. 접근할 수 없는 분석 ID는 `404`로 처리한다. 응답 파일명은 사용자 입력을 사용하지 않고 분석 ID만 사용하며 `Content-Disposition: attachment`로 제공한다.
+
+오탐 자동 제외 내역 GET은 분석 상세와 같은 프로젝트 접근 검사를 사용한다. 모든 접근 역할에 읽기 전용으로 제공하며 코드 원문·지문·원본 Semgrep JSON은 표시하지 않는다. CSV와 PDF에는 이 내역 및 조치 상태가 `FALSE_POSITIVE`인 Finding을 포함하지 않는다.
 
 ## Findings
 
@@ -76,6 +81,8 @@ POST /findings/{finding_id}/revalidate
 Finding 목록은 `severity`, `confidence`, `status`, `assignee_id`, `overdue` query parameter를 지원한다. `overdue`는 `true` 또는 `false`만 허용한다. 권한이 없는 프로젝트나 분석 ID는 정보 노출을 막기 위해 404로 처리한다. 상태 변경 POST는 상태·의견·담당자·조치 기한을 함께 갱신하며 SUPER_ADMIN 또는 해당 프로젝트에 할당된 PROJECT_MANAGER만 사용할 수 있고 CSRF 검증을 적용한다. 담당자는 해당 프로젝트에 할당된 활성 사용자만 선택할 수 있다.
 
 재검증 POST는 현재 프로젝트에 저장된 최신 소스로 새 AnalysisRun을 실행한 뒤 원본 Finding과 비교한다. SUPER_ADMIN 또는 해당 프로젝트의 PROJECT_MANAGER만 사용할 수 있고 CSRF 검증을 적용한다. 완료 후 원본 Finding 상세로 돌아가며 재검증 이력에서 새 분석과 일치 Finding을 조회할 수 있다.
+
+상태 변경 POST에서 `FALSE_POSITIVE`를 저장하면 가능한 경우 오탐 suppression을 활성화하고, 다른 상태로 되돌리면 해당 Finding이 만든 suppression을 비활성화한다.
 
 ## Rules
 

@@ -104,7 +104,37 @@ APPROVED_CWE_MAPPINGS: dict[str, ApprovedCweMapping] = {
         confidence=Confidence.HIGH,
         guidance="신뢰할 수 없는 데이터를 네이티브 객체로 역직렬화하지 말고 JSON 같은 데이터 전용 형식과 필드 검증을 사용하세요.",
     ),
+    **_family(
+        tuple(f"kisa-2021-code-injection-{language}" for language in ("java", "javascript", "python")),
+        cwe_id="CWE-94",
+        confidence=Confidence.HIGH,
+        guidance="외부 입력을 코드로 실행하지 말고 허용된 명령이나 동작을 고정된 값으로 매핑하세요.",
+    ),
+    **_family(
+        tuple(f"kisa-2021-insufficient-key-length-{language}" for language in ("java", "javascript", "python")),
+        cwe_id="CWE-326",
+        confidence=Confidence.HIGH,
+        guidance="RSA 키는 2,048비트 이상으로 생성하고 키 길이를 운영 설정에서 더 낮게 변경하지 못하게 제한하세요.",
+    ),
+    **_family(
+        ("kisa-2021-system-exit-in-servlet-java",),
+        cwe_id="CWE-676",
+        confidence=Confidence.HIGH,
+        guidance="웹 요청 처리 코드에서 JVM을 종료하지 말고 오류 응답과 예외 처리로 해당 요청만 종료하세요.",
+    ),
+    **_family(
+        ("kisa-2021-private-array-returned-java",),
+        cwe_id="CWE-495",
+        confidence=Confidence.HIGH,
+        guidance="private 배열 원본을 반환하지 말고 clone 또는 Arrays.copyOf로 만든 복사본을 반환하세요.",
+    ),
+    **_family(
+        ("kisa-2021-public-array-assigned-java",),
+        cwe_id="CWE-496",
+        confidence=Confidence.HIGH,
+        guidance="외부에서 받은 배열 참조를 private 필드에 직접 저장하지 말고 방어적 복사본을 저장하세요.",
+    ),
 }
 
 
-assert len(APPROVED_CWE_MAPPINGS) == 29
+assert len(APPROVED_CWE_MAPPINGS) == 38

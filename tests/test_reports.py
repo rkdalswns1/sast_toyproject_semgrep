@@ -233,13 +233,13 @@ def test_reports_include_required_fields_and_exclude_internal_data(
                         io.StringIO(csv_response.content.decode("utf-8-sig"))
                     )
                 )
-                assert len(rows) == 2
+                assert len(rows) == 1
                 assert rows[0]["프로젝트명"] == "고객 포털"
                 assert rows[0]["소스 버전"] == "source-1.7.0"
                 assert rows[0]["배포 버전"] == "deploy-2026.09"
                 assert rows[0]["실행 계정"] == "admin@company.com"
                 assert rows[0]["분석 상태"] == "완료"
-                assert rows[0]["CRITICAL 건수"] == "1"
+                assert rows[0]["CRITICAL 건수"] == "0"
                 assert rows[0]["HIGH 건수"] == "1"
                 assert rows[0]["주요 CWE"] == "CWE-89"
                 assert rows[0]["CWE 매핑 확신"] == "HIGH"
@@ -247,9 +247,9 @@ def test_reports_include_required_fields_and_exclude_internal_data(
                 assert rows[0]["메시지"].startswith("'=")
                 assert rows[0]["조치 상태"] == "조치 중"
                 assert rows[0]["검토 의견"] == "담당자가 수정 중"
-                assert rows[1]["파일 위치"].startswith("경로 비공개")
-                assert rows[1]["검토 의견"].startswith("'@")
                 csv_text = csv_response.content.decode("utf-8-sig")
+                assert "절대경로 방어 시험" not in csv_text
+                assert "@검토 근거" not in csv_text
                 assert "RAW-SECRET-JSON" not in csv_text
                 assert "INTERNAL-ERROR-MUST-NOT-LEAK" not in csv_text
                 assert "/srv/private" not in csv_text
@@ -273,9 +273,10 @@ def test_reports_include_required_fields_and_exclude_internal_data(
                     "매개변수화 쿼리를 사용하세요.",
                     "조치 중",
                     "담당자가 수정 중",
-                    "경로 비공개",
                 ):
                     assert expected in pdf_text
+                assert "절대경로 방어 시험" not in pdf_text
+                assert "@검토 근거" not in pdf_text
                 assert "RAW-SECRET-JSON" not in pdf_text
                 assert "INTERNAL-ERROR-MUST-NOT-LEAK" not in pdf_text
                 assert "/srv/private" not in pdf_text

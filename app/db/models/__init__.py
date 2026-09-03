@@ -4,6 +4,8 @@ from app.db.models.analysis_run import AnalysisRun
 from app.db.models.diagnostic_rule import DiagnosticRule
 from app.db.models.finding import Finding
 from app.db.models.finding_revalidation import FindingRevalidation
+from app.db.models.finding_suppression import FindingSuppression
+from app.db.models.finding_suppression_hit import FindingSuppressionHit
 from app.db.models.finding_workflow import FindingWorkflow
 from app.db.models.project import Project, ProjectUser
 from app.db.models.rule import Rule
@@ -15,6 +17,8 @@ __all__ = [
     "DiagnosticRule",
     "Finding",
     "FindingRevalidation",
+    "FindingSuppression",
+    "FindingSuppressionHit",
     "FindingWorkflow",
     "Project",
     "ProjectUser",

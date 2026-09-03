@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+
+{% block title %}오탐 자동 제외 내역 | SecureScan{% endblock %}
+
+{% block content %}
+<main class="page-shell">
+  <header class="page-header">
+    <div><p class="eyebrow">오탐 자동 제외</p><h1>분석 #{{ analysis_run.id }}</h1><p class="muted">조치 목록과 고객 보고서에서는 제외되지만, 제외 판단은 확인할 수 있도록 보존됩니다.</p></div>
+    <div class="header-actions"><a class="secondary button" href="/analysis/{{ analysis_run.id }}">분석 상세</a><a class="button" href="/projects/{{ analysis_run.project_id }}">프로젝트</a></div>
+  </header>
+  <section class="card">
+    {% if suppression_hits %}
+    <table>
+      <thead><tr><th>KISA·규칙</th><th>언어</th><th>이번 발견 위치</th><th>메시지</th><th>최초 오탐 판정</th></tr></thead>
+      <tbody>{% for hit in suppression_hits %}<tr>
+        <td><strong>{{ hit.kisa_id }}</strong><br>{{ hit.rule_name }}<br><code>{{ hit.semgrep_rule_id }}</code></td>
+        <td>{{ hit.language.value }}</td>
+        <td>{{ hit.file_path }}:{{ hit.start_line }}{% if hit.start_column %}:{{ hit.start_column }}{% endif %}{% if hit.end_line and hit.end_line != hit.start_line %}-{{ hit.end_line }}{% endif %}</td>
+        <td>{{ hit.message }}</td>
+        <td>{{ hit.reviewer.username }}<br>{{ hit.reviewed_at.strftime('%Y-%m-%d %H:%M:%S') if hit.reviewed_at else '-' }}{% if hit.review_note %}<br>{{ hit.review_note }}{% endif %}{% if hit.source_finding_id %}<br><a href="/findings/{{ hit.source_finding_id }}">원본 Finding #{{ hit.source_finding_id }}</a>{% endif %}</td>
+      </tr>{% endfor %}</tbody>
+    </table>
+    {% else %}<p class="muted">이 분석에서 자동 제외된 오탐이 없습니다.</p>{% endif %}
+  </section>
+</main>
+{% endblock %}

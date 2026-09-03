@@ -70,7 +70,12 @@ def _built_in_rule_ids() -> dict[str, dict[Language, str]]:
     for entry in KISA_2021_CATALOG:
         if entry.semgrep_rule_id is None:
             continue
-        base_rule_id = entry.semgrep_rule_id.removesuffix("-python")
+        base_rule_id = entry.semgrep_rule_id
+        for language in Language:
+            suffix = f"-{language.value.lower()}"
+            if base_rule_id.endswith(suffix):
+                base_rule_id = base_rule_id.removesuffix(suffix)
+                break
         mappings[entry.standard_id] = {
             language: f"{base_rule_id}-{language.value.lower()}"
             for language in entry.supported_languages

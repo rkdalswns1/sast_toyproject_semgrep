@@ -54,11 +54,15 @@ CWE는 언어별 Semgrep Rule ID인 DiagnosticRule에 연결하고 분석 시 Fi
 
 Finding의 탐지 원본과 조치 관리는 분리한다. `FindingWorkflow`는 최신 상태·의견·담당자·기한만 보관하고, 기한 초과 여부는 조회 시 현재 날짜와 상태로 계산한다.
 
+오탐 suppression은 원본 Finding과 분리된 프로젝트 범위 데이터다. 후속 정규화는 Rule ID·언어·상대경로·정규화된 근거 코드 SHA-256이 모두 일치할 때만 저장을 생략하며 제외 건수를 AnalysisRun 요약에 기록한다.
+
+실제로 제외된 결과는 `FindingSuppressionHit`에 분석 실행별로 스냅샷한다. 조치 대상 Finding과 보고서 데이터에는 합치지 않고 별도 읽기 전용 감사 화면에서만 제공한다. 원본 오탐 상태가 이후 변경되어도 과거 제외 판단은 유지된다.
+
 Finding 재검증은 기존 분석 파이프라인을 재사용하여 항상 새 AnalysisRun과 Finding을 만든다. 원본과 새 결과의 비교 이력은 `FindingRevalidation`에 저장하고 원본 Finding 및 FindingWorkflow는 수정하지 않는다.
 
 업로드 소스 요약은 안전한 압축 해제가 끝난 staging 영역의 실제 정규 파일로 계산한다. Project에는 현재 소스의 제한된 요약만 저장하며 원본 ZIP 파일명에서 경로 성분을 제거하고 모든 파일 위치는 소스 루트 기준 상대경로로 제한한다. 요약은 소스 경로·버전 메타데이터와 함께 교체되며 별도 업로드 이력을 만들지 않는다.
 
-CSV와 PDF 보고서는 AnalysisRun, Project, Finding, FindingWorkflow를 읽어 공통 보고서 스냅샷으로 변환한 뒤 요청 시 메모리에서 생성한다. 보고서 생성은 DB를 변경하지 않으며 원본 Semgrep JSON과 시스템 경로를 출력 계층에 전달하지 않는다.
+CSV와 PDF 보고서는 AnalysisRun, Project, Finding, FindingWorkflow를 읽어 공통 보고서 스냅샷으로 변환한 뒤 요청 시 메모리에서 생성한다. `FALSE_POSITIVE` Finding과 FindingSuppressionHit은 보고 대상과 심각도 집계에서 제외한다. 보고서 생성은 DB를 변경하지 않으며 원본 Semgrep JSON과 시스템 경로를 출력 계층에 전달하지 않는다.
 
 분석은 MVP에서 HTTP 요청 안에서 동기 실행한다. 분석 요청을 받으면 AnalysisRun을 `RUNNING` 상태로 변경하고 Semgrep을 실행한다. 성공하면 `COMPLETED`, 오류 또는 시간초과가 발생하면 `FAILED`로 변경한다.
 
@@ -94,6 +98,8 @@ MVP에서는 Alembic을 사용하지 않는다.
 SQLite 연결마다 foreign key 검사를 활성화한다.
 
 프로젝트 삭제는 SUPER_ADMIN 전용 서비스가 처리한다. DB의 연쇄 삭제로 프로젝트 하위 데이터를 정리하고, 소스 파일은 저장된 경로 문자열을 사용하지 않고 설정된 업로드 루트와 프로젝트 ID로 전용 디렉터리를 계산해 제거한다.
+
+프로젝트 만료 정리는 시작 시와 제한된 주기의 내부 작업에서 같은 삭제 서비스를 호출한다. 만료 프로젝트는 정리 주기 전이라도 접근 검사와 목록에서 제외한다.
 
 ## Request Database Session
 

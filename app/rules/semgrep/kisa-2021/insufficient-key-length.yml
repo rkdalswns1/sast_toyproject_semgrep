@@ -1,0 +1,47 @@
+rules:
+  - id: kisa-2021-insufficient-key-length-python
+    languages: [python]
+    severity: WARNING
+    message: An RSA key shorter than 2,048 bits is generated.
+    metadata:
+      kisa_standard_id: 제2절-7
+      confidence: HIGH
+      recommendation: Generate RSA keys with a size of at least 2,048 bits.
+    patterns:
+      - pattern-either:
+          - pattern: rsa.generate_private_key(..., key_size=$BITS, ...)
+          - pattern: RSA.generate($BITS, ...)
+      - metavariable-comparison:
+          metavariable: $BITS
+          comparison: $BITS < 2048
+
+  - id: kisa-2021-insufficient-key-length-java
+    languages: [java]
+    severity: WARNING
+    message: An RSA key shorter than 2,048 bits is generated.
+    metadata:
+      kisa_standard_id: 제2절-7
+      confidence: HIGH
+      recommendation: Generate RSA keys with a size of at least 2,048 bits.
+    patterns:
+      - pattern-inside: |
+          $GENERATOR = KeyPairGenerator.getInstance("RSA");
+          ...
+      - pattern: $GENERATOR.initialize($BITS)
+      - metavariable-comparison:
+          metavariable: $BITS
+          comparison: $BITS < 2048
+
+  - id: kisa-2021-insufficient-key-length-javascript
+    languages: [javascript]
+    severity: WARNING
+    message: An RSA key shorter than 2,048 bits is generated.
+    metadata:
+      kisa_standard_id: 제2절-7
+      confidence: HIGH
+      recommendation: Generate RSA keys with a modulus length of at least 2,048 bits.
+    patterns:
+      - pattern: '$CRYPTO.generateKeyPairSync("rsa", {modulusLength: $BITS})'
+      - metavariable-comparison:
+          metavariable: $BITS
+          comparison: $BITS < 2048

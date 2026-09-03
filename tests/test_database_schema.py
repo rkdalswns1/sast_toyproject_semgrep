@@ -11,6 +11,7 @@ from app.db.models import (
     DiagnosticRule,
     Finding,
     FindingRevalidation,
+    FindingSuppressionHit,
     FindingWorkflow,
     Project,
     ProjectUser,
@@ -39,6 +40,8 @@ EXPECTED_TABLES = {
     "findings",
     "finding_workflows",
     "finding_revalidations",
+    "finding_suppressions",
+    "finding_suppression_hits",
     "diagnostic_rules",
     "schema_versions",
 }
@@ -68,6 +71,17 @@ EXPECTED_FOREIGN_KEYS = {
         ("analysis_run_id", "analysis_runs", "id", "CASCADE"),
         ("matched_finding_id", "findings", "id", "SET NULL"),
         ("executed_by", "users", "id", "RESTRICT"),
+    },
+    "finding_suppressions": {
+        ("project_id", "projects", "id", "CASCADE"),
+        ("source_finding_id", "findings", "id", "SET NULL"),
+        ("created_by", "users", "id", "RESTRICT"),
+    },
+    "finding_suppression_hits": {
+        ("analysis_run_id", "analysis_runs", "id", "CASCADE"),
+        ("suppression_id", "finding_suppressions", "id", "SET NULL"),
+        ("source_finding_id", "findings", "id", "SET NULL"),
+        ("reviewed_by", "users", "id", "RESTRICT"),
     },
 }
 
@@ -106,12 +120,12 @@ def test_create_all_builds_domain_tables_schema_history_and_foreign_keys(
         versions = session.scalars(
             select(SchemaVersion).order_by(SchemaVersion.version)
         ).all()
-        assert [version.version for version in versions] == [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
+        assert [version.version for version in versions] == [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18]
         assert all(version.description and version.applied_at for version in versions)
 
     initialize_database(engine)
     with Session(engine) as session:
-        assert session.scalar(select(func.count()).select_from(SchemaVersion)) == 15
+        assert session.scalar(select(func.count()).select_from(SchemaVersion)) == 18
 
     engine.dispose()
 
@@ -165,7 +179,49 @@ def test_existing_database_is_upgraded_and_migration_is_recorded(
         assert legacy_rule.is_active is True
         assert session.scalars(
             select(SchemaVersion.version).order_by(SchemaVersion.version)
-        ).all() == [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
+        ).all() == [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18]
+
+    engine.dispose()
+
+
+def test_phase23_migration_enables_only_approved_catalog_rows(tmp_path: Path) -> None:
+    engine = create_db_engine(f"sqlite:///{tmp_path / 'phase23.db'}")
+    initialize_database(engine)
+    approved = {
+        "제1절-2": (["JAVA", "JAVASCRIPT", "PYTHON"], "kisa-2021-code-injection-python", "HIGH"),
+        "제2절-7": (["JAVA", "JAVASCRIPT", "PYTHON"], "kisa-2021-insufficient-key-length-python", "MEDIUM"),
+        "제6절-3": (["JAVA"], "kisa-2021-private-array-returned-java", "INFO"),
+        "제6절-4": (["JAVA"], "kisa-2021-public-array-assigned-java", "INFO"),
+        "제7절-2": (["JAVA"], "kisa-2021-system-exit-in-servlet-java", "MEDIUM"),
+    }
+    with Session(engine) as session:
+        session.execute(text("DELETE FROM schema_versions WHERE version = 18"))
+        for item_number, (standard_id, values) in enumerate(approved.items(), start=1):
+            session.add(
+                Rule(
+                    name=standard_id,
+                    description="legacy catalog row",
+                    standard_id=standard_id,
+                    category="TEST",
+                    item_number=item_number,
+                    is_active=True,
+                    severity=Severity.INFO,
+                    supported_languages=[],
+                    implementation_status=ImplementationStatus.NOT_IMPLEMENTED,
+                )
+            )
+        session.commit()
+
+    initialize_database(engine)
+    with Session(engine) as session:
+        assert session.get(SchemaVersion, 18) is not None
+        for standard_id, (languages, rule_id, severity) in approved.items():
+            rule = session.scalar(select(Rule).where(Rule.standard_id == standard_id))
+            assert rule is not None
+            assert rule.supported_languages == languages
+            assert rule.semgrep_rule_id == rule_id
+            assert rule.severity.value == severity
+            assert rule.implementation_status is ImplementationStatus.PARTIAL
 
     engine.dispose()
 
@@ -672,6 +728,7 @@ def test_documented_enum_constraints_are_created(tmp_path: Path) -> None:
         "user_role",
         "source_type",
         "source_origin",
+        "suppression_language",
         "project_language",
         "analysis_language",
         "analysis_status",

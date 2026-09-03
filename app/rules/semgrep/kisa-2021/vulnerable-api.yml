@@ -1,0 +1,15 @@
+rules:
+  - id: kisa-2021-system-exit-in-servlet-java
+    languages: [java]
+    severity: WARNING
+    message: A servlet calls System.exit and can terminate the application container.
+    metadata:
+      kisa_standard_id: 제7절-2
+      confidence: HIGH
+      recommendation: Return an error response or throw a handled exception instead of terminating the JVM.
+    patterns:
+      - pattern-inside: |
+          class $CLASS extends HttpServlet {
+            ...
+          }
+      - pattern: System.exit(...)

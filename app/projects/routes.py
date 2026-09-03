@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
+from datetime import date, timedelta
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Request, Response, status
 from fastapi.responses import HTMLResponse, RedirectResponse
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
 from app.auth.dependencies import (
@@ -82,12 +83,31 @@ def _parse_language(value: str) -> Language:
         raise ProjectManagementError("유효하지 않은 언어입니다.") from exc
 
 
+def _parse_expiration(value: str) -> date | None:
+    normalized = value.strip()
+    if not normalized:
+        return None
+    try:
+        expiration = date.fromisoformat(normalized)
+    except ValueError as exc:
+        raise ProjectManagementError("만료일 형식이 올바르지 않습니다.") from exc
+    if expiration <= date.today():
+        raise ProjectManagementError("만료일은 내일 이후 날짜로 지정해야 합니다.")
+    return expiration
+
+
+def _minimum_expiration() -> str:
+    return (date.today() + timedelta(days=1)).isoformat()
+
+
 @router.get("/projects", response_class=HTMLResponse)
 async def project_list(request: Request, session: Session = Depends(get_db)) -> Response:
     user = _require_user(request, session)
     if isinstance(user, RedirectResponse):
         return user
-    statement = select(Project).order_by(Project.name)
+    statement = select(Project).where(
+        or_(Project.expires_on.is_(None), Project.expires_on > date.today())
+    ).order_by(Project.name)
     if not is_super_admin(user):
         statement = statement.join(ProjectUser).where(ProjectUser.user_id == user.id)
     projects = session.scalars(statement).all()
@@ -116,6 +136,8 @@ async def new_project_page(request: Request, session: Session = Depends(get_db))
             "error": None,
             "current_user": admin,
             "language_profiles": LANGUAGE_PROFILES,
+            "is_super_admin": True,
+            "minimum_expiration": _minimum_expiration(),
         },
     )
 
@@ -127,6 +149,7 @@ async def create_project_page(
     description: Annotated[str, Form()] = "",
     language: Annotated[str, Form()] = "",
     scan_all_languages: Annotated[str | None, Form()] = None,
+    expires_on: Annotated[str, Form()] = "",
     submitted_csrf_token: Annotated[str, Form(alias="csrf_token")] = "",
     session: Session = Depends(get_db),
 ) -> Response:
@@ -144,6 +167,7 @@ async def create_project_page(
             language=_parse_language(language),
             scan_all_languages=scan_all_languages == "true",
             created_by=creator_id,
+            expires_on=_parse_expiration(expires_on),
         )
     except ProjectManagementError as exc:
         return _render(
@@ -159,8 +183,11 @@ async def create_project_page(
                     "description": description,
                     "language": language,
                     "scan_all_languages": scan_all_languages == "true",
+                    "expires_on": expires_on,
                 },
                 "language_profiles": LANGUAGE_PROFILES,
+                "is_super_admin": True,
+                "minimum_expiration": _minimum_expiration(),
             },
             status_code=status.HTTP_400_BAD_REQUEST,
         )
@@ -207,6 +234,8 @@ async def edit_project_page(
             "error": None,
             "current_user": user,
             "language_profiles": LANGUAGE_PROFILES,
+            "is_super_admin": is_super_admin(user),
+            "minimum_expiration": _minimum_expiration(),
         },
     )
 
@@ -219,6 +248,7 @@ async def edit_project(
     description: Annotated[str, Form()] = "",
     language: Annotated[str, Form()] = "",
     scan_all_languages: Annotated[str | None, Form()] = None,
+    expires_on: Annotated[str, Form()] = "",
     submitted_csrf_token: Annotated[str, Form(alias="csrf_token")] = "",
     session: Session = Depends(get_db),
 ) -> Response:
@@ -226,10 +256,15 @@ async def edit_project(
     user = _require_user(request, session)
     if isinstance(user, RedirectResponse):
         return user
-    accessible_project_or_404(session, project_id, user)
+    project = accessible_project_or_404(session, project_id, user)
     if not can_operate_project(user):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN)
     try:
+        parsed_expiration = (
+            _parse_expiration(expires_on)
+            if is_super_admin(user)
+            else project.expires_on
+        )
         session.rollback()
         update_project(
             session,
@@ -238,6 +273,7 @@ async def edit_project(
             description=description,
             language=_parse_language(language),
             scan_all_languages=scan_all_languages == "true",
+            expires_on=parsed_expiration,
         )
     except ProjectManagementError as exc:
         project = session.get(Project, project_id)
@@ -254,8 +290,11 @@ async def edit_project(
                     "description": description,
                     "language": language,
                     "scan_all_languages": scan_all_languages == "true",
+                    "expires_on": expires_on,
                 },
                 "language_profiles": LANGUAGE_PROFILES,
+                "is_super_admin": is_super_admin(user),
+                "minimum_expiration": _minimum_expiration(),
             },
             status_code=status.HTTP_400_BAD_REQUEST,
         )

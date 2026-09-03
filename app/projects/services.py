@@ -2,13 +2,17 @@
 
 from __future__ import annotations
 
+from datetime import date
+import logging
 from pathlib import Path
 import shutil
 import uuid
 from typing import Any
 
 from sqlalchemy import select
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
+from sqlalchemy.orm import sessionmaker
 
 from app.db.models.enums import Language, SourceOrigin, SourceType
 from app.db.models.project import Project, ProjectUser
@@ -21,6 +25,7 @@ class ProjectManagementError(ValueError):
 
 SOURCE_VERSION_MAX_LENGTH = 100
 SOURCE_DESCRIPTION_MAX_LENGTH = 2_000
+logger = logging.getLogger(__name__)
 
 
 def normalize_source_metadata(
@@ -59,8 +64,9 @@ def create_project(
     name: str,
     description: str | None,
     language: Language,
-    scan_all_languages: bool = False,
     created_by: int,
+    scan_all_languages: bool = False,
+    expires_on: date | None = None,
 ) -> Project:
     normalized_name = name.strip()
     if not normalized_name:
@@ -73,6 +79,7 @@ def create_project(
         source_origin=SourceOrigin.ZIP,
         language=language,
         scan_all_languages=scan_all_languages,
+        expires_on=expires_on,
         source_path="",
         created_by=created_by,
     )
@@ -91,6 +98,7 @@ def update_project(
     description: str | None,
     language: Language,
     scan_all_languages: bool = False,
+    expires_on: date | None = None,
 ) -> Project:
     normalized_name = name.strip()
     if not normalized_name:
@@ -104,6 +112,7 @@ def update_project(
         project.description = description.strip() or None if description else None
         project.language = language
         project.scan_all_languages = scan_all_languages
+        project.expires_on = expires_on
     return project
 
 
@@ -208,3 +217,38 @@ def delete_project(
             quarantined_directory.unlink()
         else:
             shutil.rmtree(quarantined_directory)
+
+
+def delete_expired_projects(
+    session_factory: sessionmaker[Session],
+    *,
+    upload_dir: Path,
+    today: date | None = None,
+) -> list[int]:
+    """Delete each expired project independently so one failure does not stop others."""
+    reference_date = today or date.today()
+    with session_factory() as session:
+        project_ids = list(
+            session.scalars(
+                select(Project.id)
+                .where(
+                    Project.expires_on.is_not(None),
+                    Project.expires_on <= reference_date,
+                )
+                .order_by(Project.id)
+            ).all()
+        )
+
+    deleted: list[int] = []
+    for project_id in project_ids:
+        try:
+            with session_factory() as session:
+                delete_project(
+                    session,
+                    project_id=project_id,
+                    upload_dir=upload_dir,
+                )
+            deleted.append(project_id)
+        except (OSError, ProjectManagementError, SQLAlchemyError):
+            logger.exception("Expired project cleanup failed for project %s", project_id)
+    return deleted

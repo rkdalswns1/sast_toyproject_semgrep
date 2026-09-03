@@ -11,4 +11,7 @@ function run(db, userInput, res) {
   upload.mv("/srv/uploads/" + upload.name);
   libxmljs.parseXml(xmlInput, {noent: true});
   const agent = new https.Agent({rejectUnauthorized: false});
+  const code = req.query.code;
+  eval(code);
+  crypto.generateKeyPairSync("rsa", {modulusLength: 1024});
 }

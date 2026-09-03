@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import hashlib
+from dataclasses import dataclass
 from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -13,6 +15,8 @@ from app.db.models.analysis_run import AnalysisRun
 from app.db.models.diagnostic_rule import DiagnosticRule
 from app.db.models.enums import Confidence, FindingStatus, Language, Severity
 from app.db.models.finding import Finding
+from app.db.models.finding_suppression import FindingSuppression
+from app.db.models.finding_suppression_hit import FindingSuppressionHit
 from app.db.models.finding_workflow import FindingWorkflow
 from app.db.models.project import ProjectUser
 from app.db.models.rule import Rule
@@ -25,6 +29,11 @@ class FindingNormalizationError(ValueError):
 
 class FindingWorkflowError(ValueError):
     """Raised when a remediation workflow update is invalid."""
+
+
+@dataclass(slots=True)
+class FindingPersistenceMetrics:
+    suppressed_count: int = 0
 
 
 _SEMGREP_SEVERITY_MAP = {
@@ -74,6 +83,26 @@ def _optional_column(position: object) -> int | None:
     return None
 
 
+def evidence_sha256(value: object) -> str | None:
+    """Return a stable exact-code fingerprint without storing source content."""
+    if not isinstance(value, str):
+        return None
+    normalized = "\n".join(
+        line.rstrip() for line in value.replace("\r\n", "\n").replace("\r", "\n").split("\n")
+    ).strip()
+    if not normalized:
+        return None
+    return hashlib.sha256(normalized.encode("utf-8")).hexdigest()
+
+
+def _matches_semgrep_rule_id(raw_check_id: object, configured_rule_id: str) -> bool:
+    """Match a configured ID against Semgrep's optional config-path prefix."""
+    return isinstance(raw_check_id, str) and (
+        raw_check_id == configured_rule_id
+        or raw_check_id.endswith(f".{configured_rule_id}")
+    )
+
+
 def persist_normalized_findings(
     session: Session,
     *,
@@ -81,6 +110,7 @@ def persist_normalized_findings(
     semgrep_result: dict[str, Any],
     source_root: Path,
     scan_languages: set[Language] | None = None,
+    metrics: FindingPersistenceMetrics | None = None,
 ) -> int:
     """Persist results mapped to a compatible catalog rule; never invent one."""
     analysis_run = session.get(AnalysisRun, analysis_run_id)
@@ -128,6 +158,22 @@ def persist_normalized_findings(
             )
         ).all()
     }
+    active_suppressions = session.scalars(
+        select(FindingSuppression).where(
+            FindingSuppression.project_id == analysis_run.project_id,
+            FindingSuppression.is_active.is_(True),
+            FindingSuppression.language.in_(allowed_languages),
+        )
+    ).all()
+    suppressions_by_key = {
+        (
+            suppression.language,
+            suppression.semgrep_rule_id,
+            suppression.file_path,
+            suppression.evidence_sha256,
+        ): suppression
+        for suppression in active_suppressions
+    }
 
     findings: list[Finding] = []
     for item in results:
@@ -147,16 +193,12 @@ def persist_normalized_findings(
             # Rule catalog ownership starts in Phase 8. Until then an unmapped
             # engine result must not produce a fabricated KISA association.
             continue
-        check_id_candidates = (
-            {check_id, check_id.rsplit(".", 1)[-1]}
-            if isinstance(check_id, str)
-            else set()
-        )
         diagnostic_mapping = next(
             (
-                active_mappings[(rule.id, candidate)]
-                for candidate in check_id_candidates
-                if (rule.id, candidate) in active_mappings
+                mapping
+                for (catalog_rule_id, _), mapping in active_mappings.items()
+                if catalog_rule_id == rule.id
+                and _matches_semgrep_rule_id(check_id, mapping.semgrep_rule_id)
             ),
             None,
         )
@@ -189,6 +231,44 @@ def persist_normalized_findings(
         evidence_lines = extra.get("lines")
         evidence = {"lines": evidence_lines} if isinstance(evidence_lines, str) else None
         normalized_file_path = _normalized_path(item.get("path"), source_root)
+        fingerprint = evidence_sha256(evidence_lines)
+        suppression = suppressions_by_key.get((
+            mapping_language,
+            diagnostic_mapping.semgrep_rule_id,
+            normalized_file_path,
+            fingerprint,
+        )) if fingerprint is not None else None
+        if suppression is not None:
+            source_workflow = (
+                session.get(FindingWorkflow, suppression.source_finding_id)
+                if suppression.source_finding_id is not None
+                else None
+            )
+            session.add(
+                FindingSuppressionHit(
+                    analysis_run_id=analysis_run.id,
+                    suppression_id=suppression.id,
+                    source_finding_id=suppression.source_finding_id,
+                    reviewed_by=suppression.created_by,
+                    kisa_id=rule.standard_id,
+                    rule_name=rule.name,
+                    language=mapping_language,
+                    semgrep_rule_id=diagnostic_mapping.semgrep_rule_id,
+                    file_path=normalized_file_path,
+                    start_line=_required_line(item.get("start"), "시작"),
+                    start_column=_optional_column(item.get("start")),
+                    end_line=_required_line(item.get("end"), "종료"),
+                    end_column=_optional_column(item.get("end")),
+                    message=message.strip(),
+                    review_note=source_workflow.note if source_workflow else None,
+                    reviewed_at=(
+                        source_workflow.updated_at if source_workflow else None
+                    ),
+                )
+            )
+            if metrics is not None:
+                metrics.suppressed_count += 1
+            continue
         normalized_raw_result = dict(item)
         normalized_raw_result["path"] = normalized_file_path
 
@@ -276,6 +356,77 @@ def update_finding_workflow(
         workflow.due_date = due_date
         workflow.updated_by = updated_by
         workflow.updated_at = datetime.now(timezone.utc)
+
+        if workflow_status is FindingStatus.FALSE_POSITIVE:
+            raw_result = finding.raw_result if isinstance(finding.raw_result, dict) else {}
+            raw_check_id = raw_result.get("check_id")
+            diagnostic_mappings = session.scalars(
+                select(DiagnosticRule).where(
+                    DiagnosticRule.catalog_rule_id == finding.rule_id,
+                    DiagnosticRule.language == finding.language,
+                )
+            ).all()
+            diagnostic_mapping = next(
+                (
+                    mapping
+                    for mapping in diagnostic_mappings
+                    if _matches_semgrep_rule_id(
+                        raw_check_id, mapping.semgrep_rule_id
+                    )
+                ),
+                None,
+            )
+            semgrep_rule_id = (
+                diagnostic_mapping.semgrep_rule_id
+                if diagnostic_mapping is not None
+                else None
+            )
+            evidence_lines = (
+                finding.evidence.get("lines")
+                if isinstance(finding.evidence, dict)
+                else None
+            )
+            fingerprint = evidence_sha256(evidence_lines)
+            analysis_run = session.get(AnalysisRun, finding.analysis_run_id)
+            if (
+                analysis_run is not None
+                and semgrep_rule_id is not None
+                and fingerprint is not None
+            ):
+                suppression = session.scalar(
+                    select(FindingSuppression).where(
+                        FindingSuppression.project_id == analysis_run.project_id,
+                        FindingSuppression.language == finding.language,
+                        FindingSuppression.semgrep_rule_id == semgrep_rule_id,
+                        FindingSuppression.file_path == finding.file_path,
+                        FindingSuppression.evidence_sha256 == fingerprint,
+                    )
+                )
+                if suppression is None:
+                    suppression = FindingSuppression(
+                        project_id=analysis_run.project_id,
+                        language=finding.language,
+                        semgrep_rule_id=semgrep_rule_id,
+                        file_path=finding.file_path,
+                        evidence_sha256=fingerprint,
+                        source_finding_id=finding.id,
+                        created_by=updated_by,
+                        is_active=True,
+                    )
+                    session.add(suppression)
+                else:
+                    suppression.source_finding_id = finding.id
+                    suppression.created_by = updated_by
+                    suppression.is_active = True
+        else:
+            suppressions = session.scalars(
+                select(FindingSuppression).where(
+                    FindingSuppression.source_finding_id == finding.id,
+                    FindingSuppression.is_active.is_(True),
+                )
+            ).all()
+            for suppression in suppressions:
+                suppression.is_active = False
     return workflow
 
 

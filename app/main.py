@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+import asyncio
 import os
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, suppress
 
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
@@ -16,6 +17,7 @@ from app.config import Settings
 from app.db.database import create_db_engine, create_session_factory, initialize_database
 from app.findings.routes import router as findings_router
 from app.projects.routes import router as projects_router
+from app.projects.services import delete_expired_projects
 from app.rules.routes import router as rules_router
 from app.rules.services import seed_kisa_2021_catalog
 
@@ -37,8 +39,28 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             )
         with session_factory() as session:
             seed_kisa_2021_catalog(session)
-        yield
-        engine.dispose()
+        delete_expired_projects(
+            session_factory,
+            upload_dir=app_settings.upload_dir,
+        )
+
+        async def expiry_sweep_loop() -> None:
+            while True:
+                await asyncio.sleep(app_settings.project_expiry_sweep_seconds)
+                await asyncio.to_thread(
+                    delete_expired_projects,
+                    session_factory,
+                    upload_dir=app_settings.upload_dir,
+                )
+
+        expiry_task = asyncio.create_task(expiry_sweep_loop())
+        try:
+            yield
+        finally:
+            expiry_task.cancel()
+            with suppress(asyncio.CancelledError):
+                await expiry_task
+            engine.dispose()
 
     application = FastAPI(title="SAST MVP", lifespan=lifespan)
     application.state.settings = app_settings

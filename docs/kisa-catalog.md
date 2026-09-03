@@ -43,4 +43,6 @@ KISA 카탈로그에 존재한다고 해서 자동 탐지가 구현된 것으로
 
 - Java, JavaScript, Python 공통: SQL 삽입, 경로 조작 및 자원 삽입, 크로스사이트 스크립트, 운영체제 명령어 삽입, 위험한 형식 파일 업로드, 부적절한 XML 외부개체 참조, 취약한 암호화 알고리즘 사용, 하드코드된 중요정보, 부적절한 인증서 유효성 검증
 - Java, Python: 신뢰할 수 없는 데이터의 역직렬화
-- 위 열 항목은 대표 패턴만 자동 탐지하므로 `PARTIAL`이며, 나머지 39개 항목은 `NOT_IMPLEMENTED`를 유지한다.
+- Java, JavaScript, Python 공통: 코드삽입, 충분하지 않은 키 길이 사용
+- Java: Public 메소드부터 반환된 Private 배열, Private 배열에 Public 데이터 할당, Servlet의 `System.exit`로 제한한 취약한 API 사용
+- 위 열 항목은 대표 패턴만 자동 탐지하므로 `PARTIAL`이며, 나머지 34개 항목은 `NOT_IMPLEMENTED`를 유지한다.

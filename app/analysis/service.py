@@ -31,7 +31,11 @@ from app.db.models.enums import AnalysisStatus, Language
 from app.db.models.project import Project
 from app.db.models.rule import Rule
 from app.db.models.finding import Finding
-from app.findings.services import FindingNormalizationError, persist_normalized_findings
+from app.findings.services import (
+    FindingNormalizationError,
+    FindingPersistenceMetrics,
+    persist_normalized_findings,
+)
 
 
 class AnalysisExecutionError(ValueError):
@@ -494,28 +498,46 @@ def execute_project_analysis(
         with session.begin():
             analysis_run = session.get(AnalysisRun, run_id)
             assert analysis_run is not None
+            persistence_metrics = FindingPersistenceMetrics()
             stored_count = persist_normalized_findings(
                 session,
                 analysis_run_id=analysis_run.id,
                 semgrep_result=semgrep_result,
                 source_root=isolated_source,
                 scan_languages=scan_languages,
+                metrics=persistence_metrics,
             )
             session.flush()
             language_counts = session.execute(
-                select(Finding.language, func.count(Finding.id))
+                select(
+                    Finding.language,
+                    func.count(Finding.id),
+                    func.count(func.distinct(Finding.kisa_id)),
+                )
                 .where(Finding.analysis_run_id == analysis_run.id)
                 .group_by(Finding.language)
                 .order_by(Finding.language)
             ).all()
+            distinct_kisa_count = session.scalar(
+                select(func.count(func.distinct(Finding.kisa_id))).where(
+                    Finding.analysis_run_id == analysis_run.id
+                )
+            ) or 0
             analysis_run.status = AnalysisStatus.COMPLETED
             analysis_run.finished_at = _utcnow()
             analysis_run.error_message = None
             analysis_run.summary = {
                 **summary,
                 "stored_finding_count": stored_count,
+                "suppressed_finding_count": persistence_metrics.suppressed_count,
                 "stored_finding_count_by_language": {
-                    language.value: count for language, count in language_counts
+                    language.value: finding_count
+                    for language, finding_count, _ in language_counts
+                },
+                "stored_distinct_kisa_count": distinct_kisa_count,
+                "stored_distinct_kisa_count_by_language": {
+                    language.value: distinct_count
+                    for language, _, distinct_count in language_counts
                 },
                 "provenance": provenance,
             }

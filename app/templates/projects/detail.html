@@ -15,6 +15,7 @@
     <div><span>수집 방식</span><strong>{{ project.source_origin.value }}</strong></div>
     <div><span>소스 버전</span><strong>{{ project.source_version or '-' }}</strong></div>
     <div><span>배포 버전</span><strong>{{ project.deployment_version or '-' }}</strong></div>
+    <div><span>프로젝트 만료일</span><strong>{{ project.expires_on.isoformat() if project.expires_on else '-' }}</strong></div>
     <div><span>생성자</span><strong>{{ project.creator.username }}</strong></div>
     <div><span>생성 일시</span><strong>{{ project.created_at.strftime('%Y-%m-%d %H:%M') }}</strong></div>
   </section>

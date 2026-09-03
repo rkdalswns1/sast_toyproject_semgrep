@@ -17,6 +17,7 @@ from app.auth.dependencies import can_operate_project, current_active_user, get_
 from app.auth.session import csrf_is_valid, csrf_token, persist_session
 from app.db.models.analysis_run import AnalysisRun
 from app.db.models.finding import Finding
+from app.db.models.finding_suppression_hit import FindingSuppressionHit
 from app.db.models.enums import SourceOrigin
 from app.db.models.user import User
 from app.projects.access import accessible_project_or_404
@@ -265,6 +266,33 @@ async def analysis_detail(
             "analysis_run": analysis_run,
             "current_user": user,
             "can_view_error": can_operate_project(user),
+        },
+    )
+
+
+@router.get("/analysis/{analysis_id}/suppressions", response_class=HTMLResponse)
+async def analysis_suppression_history(
+    analysis_id: int, request: Request, session: Session = Depends(get_db)
+) -> Response:
+    user = _require_user(request, session)
+    if isinstance(user, RedirectResponse):
+        return user
+    analysis_run = session.get(AnalysisRun, analysis_id)
+    if analysis_run is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+    accessible_project_or_404(session, analysis_run.project_id, user)
+    hits = session.scalars(
+        select(FindingSuppressionHit)
+        .where(FindingSuppressionHit.analysis_run_id == analysis_run.id)
+        .order_by(FindingSuppressionHit.id)
+    ).all()
+    return _render(
+        request,
+        "analysis/suppressions.html",
+        {
+            "analysis_run": analysis_run,
+            "suppression_hits": hits,
+            "current_user": user,
         },
     )
 

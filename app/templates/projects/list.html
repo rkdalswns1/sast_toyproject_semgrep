@@ -16,9 +16,9 @@
   <section class="card">
     {% if projects %}
     <table>
-      <thead><tr><th>프로젝트명</th><th>언어</th><th>분석 모드</th><th>설명</th><th>생성 일시</th><th></th></tr></thead>
+      <thead><tr><th>프로젝트명</th><th>언어</th><th>분석 모드</th><th>설명</th><th>만료일</th><th>생성 일시</th><th></th></tr></thead>
       <tbody>{% for project in projects %}
-        <tr><td><strong>{{ project.name }}</strong></td><td><span class="badge">{{ project.language.value }}</span></td><td>{{ "자동 감지" if project.scan_all_languages else "단일 언어" }}</td><td>{{ project.description or "-" }}</td><td>{{ project.created_at.strftime('%Y-%m-%d') }}</td><td><a class="secondary button" href="/projects/{{ project.id }}">상세</a></td></tr>
+        <tr><td><strong>{{ project.name }}</strong></td><td><span class="badge">{{ project.language.value }}</span></td><td>{{ "자동 감지" if project.scan_all_languages else "단일 언어" }}</td><td>{{ project.description or "-" }}</td><td>{{ project.expires_on.isoformat() if project.expires_on else '-' }}</td><td>{{ project.created_at.strftime('%Y-%m-%d') }}</td><td><a class="secondary button" href="/projects/{{ project.id }}">상세</a></td></tr>
       {% endfor %}</tbody>
     </table>
     {% else %}

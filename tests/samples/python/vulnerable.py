@@ -14,3 +14,6 @@ etree.XMLParser(resolve_entities=True)
 requests.get(target_url, verify=False)
 payload = request.data
 pickle.loads(payload)
+code = request.args.get("code")
+eval(code)
+rsa.generate_private_key(public_exponent=65537, key_size=1024)

@@ -60,12 +60,13 @@ def test_kisa_2021_catalog_seeds_all_49_official_items_idempotently(tmp_path: Pa
                     Language.PYTHON.value,
                 ]
                 assert sql_injection.implementation_status is ImplementationStatus.PARTIAL
-                not_implemented = session.scalar(
+                code_injection = session.scalar(
                     select(Rule).where(Rule.standard_id == "제1절-2")
                 )
-                assert not_implemented is not None
-                assert not_implemented.implementation_status is ImplementationStatus.NOT_IMPLEMENTED
-                assert not_implemented.supported_languages == []
+                assert code_injection is not None
+                assert code_injection.implementation_status is ImplementationStatus.PARTIAL
+                assert code_injection.supported_languages == ["JAVA", "JAVASCRIPT", "PYTHON"]
+                assert code_injection.semgrep_rule_id == "kisa-2021-code-injection-python"
                 certificate = session.scalar(
                     select(Rule).where(Rule.standard_id == "제2절-11")
                 )

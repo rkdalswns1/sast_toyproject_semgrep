@@ -87,3 +87,11 @@ Critical 또는 High 취약점은 배포를 중단하고 수정 버전으로 갱
 - API와 archive 다운로드에 30초 기본 timeout을 적용하고 archive는 `MAX_UPLOAD_BYTES`를 넘기기 전에 중단한다.
 - 내려받은 데이터는 기존 ZIP 검증·격리 절차를 모두 통과해야 프로젝트 최신 소스로 교체한다.
 - 토큰·쿠키·비밀번호, Git clone, private repository는 Phase 20 범위에서 입력하거나 저장하지 않는다.
+
+## Expiration and Suppression Boundary
+
+- 만료일은 SUPER_ADMIN만 변경하고 만료 프로젝트는 모든 역할에 404로 처리한다.
+- 자동 삭제는 기존의 계산된 `uploads/projects/{project_id}` 경계만 사용하며 DB의 저장 경로 문자열을 신뢰하지 않는다.
+- 오탐 suppression은 프로젝트 ID를 필수 범위로 사용해 다른 프로젝트의 동일 코드에 영향을 주지 않는다.
+- suppression에는 상대경로와 코드 SHA-256만 저장하고 코드 원문·절대경로는 저장하지 않는다.
+- 분석별 오탐 제외 이력은 기존 프로젝트 접근 검사를 재사용하고 코드 원문·지문·원본 Semgrep JSON을 저장하거나 표시하지 않는다. 고객 CSV/PDF에는 수동 오탐 및 자동 제외 결과를 포함하지 않는다.

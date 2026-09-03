@@ -85,7 +85,7 @@ def _seed_run(session: Session, *, project: Project, user: User) -> AnalysisRun:
     return run
 
 
-def test_approved_29_rule_ids_have_exact_cwe_mapping(tmp_path: Path) -> None:
+def test_approved_rule_ids_have_exact_cwe_mapping(tmp_path: Path) -> None:
     application = create_app(_settings(tmp_path, "mapping.db"))
 
     async def exercise() -> None:
@@ -94,7 +94,7 @@ def test_approved_29_rule_ids_have_exact_cwe_mapping(tmp_path: Path) -> None:
                 mappings = session.scalars(
                     select(DiagnosticRule).order_by(DiagnosticRule.semgrep_rule_id)
                 ).all()
-                assert len(mappings) == 29
+                assert len(mappings) == 38
                 assert {mapping.semgrep_rule_id for mapping in mappings} == set(
                     APPROVED_CWE_MAPPINGS
                 )
