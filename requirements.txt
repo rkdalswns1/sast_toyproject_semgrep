@@ -9,5 +9,5 @@ pypdf==6.10.0
 pytest==9.1.1
 reportlab==4.4.9
 semgrep==1.175.0
-sqlalchemy==2.0.52
+sqlalchemy==2.0.53
 uvicorn==0.52.4
