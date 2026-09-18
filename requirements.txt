@@ -8,6 +8,6 @@ python-multipart==0.0.32
 pypdf==6.10.0
 pytest==9.1.1
 reportlab==4.4.9
-semgrep==1.175.0
+semgrep==1.177.0
 sqlalchemy==2.0.52
 uvicorn==0.52.4
